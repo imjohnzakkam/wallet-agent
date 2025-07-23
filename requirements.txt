@@ -2,3 +2,6 @@ google-generativeai
 google-cloud-firestore
 pillow
 python-dotenv
+google-cloud-aiplatform
+fastapi
+uvicorn

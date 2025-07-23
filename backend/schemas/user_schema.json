@@ -1,0 +1,23 @@
+{
+  "collection_name": "users",
+  "document_id": "user_id",
+  "description": "Stores information about each user of the application.",
+  "fields": {
+    "email": {
+      "type": "string",
+      "description": "The user's email address."
+    },
+    "created_at": {
+      "type": "timestamp",
+      "description": "The timestamp when the user account was created."
+    },
+    "display_name": {
+      "type": "string",
+      "description": "The user's preferred name."
+    },
+    "fcm_token": {
+      "type": "string",
+      "description": "Firebase Cloud Messaging token for push notifications."
+    }
+  }
+} 

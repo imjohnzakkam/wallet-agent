@@ -8,7 +8,8 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, asdict
 from enum import Enum
-import google.generativeai as genai
+import vertexai
+from vertexai.generative_models import GenerativeModel, Part
 from google.cloud import firestore
 import base64
 from pathlib import Path
@@ -86,10 +87,10 @@ class WalletPass:
 
 # 1. OCR Pipeline Component
 class ReceiptOCRPipeline:
-    def __init__(self, gemini_api_key: str):
-        logger.info("Initializing ReceiptOCRPipeline")
-        genai.configure(api_key=gemini_api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+    def __init__(self, project_id: str, location: str):
+        logger.info("Initializing ReceiptOCRPipeline with Vertex AI")
+        vertexai.init(project=project_id, location=location)
+        self.model = GenerativeModel('gemini-1.5-flash-001')
         logger.info("ReceiptOCRPipeline initialized successfully")
         
     def extract_receipt_data(self, media_content: bytes, media_type: str = "image") -> Receipt:
@@ -130,10 +131,12 @@ class ReceiptOCRPipeline:
             # Create content based on media type
             if media_type == "image":
                 logger.debug("Processing image with Gemini")
-                response = self.model.generate_content([prompt, {"mime_type": "image/jpeg", "data": media_content}])
+                image_part = Part.from_data(media_content, mime_type="image/jpeg")
+                response = self.model.generate_content([prompt, image_part])
             else:  # video
                 logger.debug("Processing video with Gemini")
-                response = self.model.generate_content([prompt, {"mime_type": "video/mp4", "data": media_content}])
+                video_part = Part.from_data(media_content, mime_type="video/mp4")
+                response = self.model.generate_content([prompt, video_part])
             
             processing_time = (datetime.now() - start_time).total_seconds()
             logger.info(f"Gemini processing completed in {processing_time:.2f} seconds")
@@ -211,10 +214,10 @@ class ReceiptOCRPipeline:
 
 # 2. AI Chat Assistant Component
 class ReceiptChatAssistant:
-    def __init__(self, gemini_api_key: str, db=None):
-        logger.info("Initializing ReceiptChatAssistant")
-        genai.configure(api_key=gemini_api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+    def __init__(self, project_id: str, location: str, db=None):
+        logger.info("Initializing ReceiptChatAssistant with Vertex AI")
+        vertexai.init(project=project_id, location=location)
+        self.model = GenerativeModel('gemini-1.5-flash-001')
         self.db = db
         logger.info("ReceiptChatAssistant initialized successfully")
         
@@ -336,9 +339,11 @@ class ReceiptChatAssistant:
 
 # 3. Analysis Pipeline Component
 class ReceiptAnalysisPipeline:
-    def __init__(self, db=None, gemini_api_key: str = None):
+    def __init__(self, db=None, project_id: str = None, location: str = None):
         logger.info("Initializing ReceiptAnalysisPipeline")
         self.db = db
+        if project_id and location:
+            vertexai.init(project=project_id, location=location)
         logger.info("ReceiptAnalysisPipeline initialized successfully")
         
     def generate_periodic_insights(self, user_id: str) -> List[WalletPass]:
@@ -378,9 +383,9 @@ class ReceiptAnalysisPipeline:
         return passes
 
 # Main Integration Class
-class AgentPipeline:
-    def __init__(self, gemini_api_key: str, firestore_credentials=None):
-        logger.info("Initializing AgentPipeline")
+class AIPipeline:
+    def __init__(self, project_id: str, location: str, firestore_credentials=None):
+        logger.info("Initializing AIPipeline")
         
         # Initialize Firestore (optional)
         self.db = None
@@ -394,11 +399,11 @@ class AgentPipeline:
             logger.info("Running without Firestore database")
         
         # Initialize components
-        self.ocr = ReceiptOCRPipeline(gemini_api_key)
-        self.chat = ReceiptChatAssistant(gemini_api_key, self.db)
-        self.analytics = ReceiptAnalysisPipeline(self.db, gemini_api_key)
+        self.ocr = ReceiptOCRPipeline(project_id, location)
+        self.chat = ReceiptChatAssistant(project_id, location, self.db)
+        self.analytics = ReceiptAnalysisPipeline(self.db, project_id, location)
         
-        logger.info("AgentPipeline initialized successfully")
+        logger.info("AIPipeline initialized successfully")
     
     def process_receipt(self, media_content: bytes, media_type: str, user_id: str) -> Dict[str, Any]:
         """Process a receipt and store in database"""

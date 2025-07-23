@@ -1,0 +1,72 @@
+{
+  "collection_name": "receipts",
+  "document_id": "auto-generated",
+  "description": "Stores the details of every receipt processed by the OCR pipeline.",
+  "fields": {
+    "user_id": {
+      "type": "string",
+      "description": "A reference to the user who owns this receipt."
+    },
+    "vendor_name": {
+      "type": "string",
+      "description": "The name of the store or vendor."
+    },
+    "category": {
+      "type": "string",
+      "description": "The receipt category (e.g., 'grocery', 'restaurant')."
+    },
+    "date_time": {
+      "type": "timestamp",
+      "description": "The date and time from the receipt."
+    },
+    "amount": {
+      "type": "number",
+      "description": "The total amount of the receipt."
+    },
+    "subtotal": {
+      "type": "number",
+      "description": "The subtotal before tax."
+    },
+    "tax": {
+      "type": "number",
+      "description": "The tax amount."
+    },
+    "currency": {
+      "type": "string",
+      "description": "The currency code (e.g., 'INR', 'USD')."
+    },
+    "payment_method": {
+      "type": "string",
+      "description": "The method of payment (e.g., 'cash', 'card')."
+    },
+    "language": {
+      "type": "string",
+      "description": "The language of the receipt."
+    },
+    "items": {
+      "type": "array",
+      "description": "A list of items on the receipt.",
+      "items": {
+        "type": "map",
+        "fields": {
+          "name": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "created_at": {
+      "type": "timestamp",
+      "description": "The timestamp when the receipt was added to the database."
+    }
+  }
+} 
