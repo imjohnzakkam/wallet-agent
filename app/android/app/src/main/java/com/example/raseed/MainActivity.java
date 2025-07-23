@@ -1,6 +1,7 @@
 package com.example.raseed;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -52,6 +53,13 @@ public class MainActivity extends AppCompatActivity {
                     CAMERA_PERMISSION_REQUEST);
         }
         captureButton.setOnClickListener(v -> takePhoto());
+
+        Button askButton = findViewById(R.id.openAskButton);
+        askButton.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, AskActivity.class);
+            startActivity(intent);
+        });
+
     }
 
     private void startCamera() {
