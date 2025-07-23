@@ -300,9 +300,9 @@ def main():
     print("Initializing Wallet Agent AI Pipeline...")
     logger.info("Initializing pipeline")
     
-    from pipeline import WalletAgentPipeline
+    from pipeline import AgentPipeline
     
-    pipeline = WalletAgentPipeline(api_key)
+    pipeline = AgentPipeline(api_key)
     logger.info("Pipeline initialized successfully")
     
     # Run tests
