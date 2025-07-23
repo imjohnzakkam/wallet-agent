@@ -24,7 +24,7 @@ def setup_logging():
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(f'logs/raseed_pipeline_{datetime.now().strftime("%Y%m%d")}.log'),
+            logging.FileHandler(f'logs/wallet_agent_pipeline_{datetime.now().strftime("%Y%m%d")}.log'),
             logging.StreamHandler()
         ]
     )
@@ -378,9 +378,9 @@ class ReceiptAnalysisPipeline:
         return passes
 
 # Main Integration Class
-class RaseedAIPipeline:
+class AgentPipeline:
     def __init__(self, gemini_api_key: str, firestore_credentials=None):
-        logger.info("Initializing RaseedAIPipeline")
+        logger.info("Initializing AgentPipeline")
         
         # Initialize Firestore (optional)
         self.db = None
@@ -398,7 +398,7 @@ class RaseedAIPipeline:
         self.chat = ReceiptChatAssistant(gemini_api_key, self.db)
         self.analytics = ReceiptAnalysisPipeline(self.db, gemini_api_key)
         
-        logger.info("RaseedAIPipeline initialized successfully")
+        logger.info("AgentPipeline initialized successfully")
     
     def process_receipt(self, media_content: bytes, media_type: str, user_id: str) -> Dict[str, Any]:
         """Process a receipt and store in database"""
