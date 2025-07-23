@@ -269,7 +269,7 @@ def main():
     """Main test function"""
     import argparse
     
-    parser = argparse.ArgumentParser(description='Test Raseed AI Pipeline')
+    parser = argparse.ArgumentParser(description='Test Wallet Agent AI Pipeline')
     parser.add_argument('--image', type=str, help='Path to test image')
     parser.add_argument('--api-key', type=str, help='Gemini API key')
     parser.add_argument('--test', choices=['ocr', 'chat', 'analytics', 'all'], 
@@ -279,7 +279,7 @@ def main():
     
     # Setup logging
     logger = setup_test_logging()
-    logger.info("Starting Raseed AI Pipeline test run")
+    logger.info("Starting Wallet Agent AI Pipeline test run")
     
     # Load environment
     env = load_env()
@@ -297,12 +297,12 @@ def main():
     test_user_id = env.get('TEST_USER_ID', 'test_user_123')
     
     # Initialize pipeline
-    print("Initializing Raseed AI Pipeline...")
+    print("Initializing Wallet Agent AI Pipeline...")
     logger.info("Initializing pipeline")
     
-    from pipeline import RaseedAIPipeline
+    from pipeline import WalletAgentPipeline
     
-    pipeline = RaseedAIPipeline(api_key)
+    pipeline = WalletAgentPipeline(api_key)
     logger.info("Pipeline initialized successfully")
     
     # Run tests

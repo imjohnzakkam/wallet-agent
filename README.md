@@ -1,6 +1,6 @@
-# Raseed AI Pipeline
+# Wallet Agent AI
 
-A simple, powerful AI pipeline for receipt management and spending analysis using Google's Gemini AI.
+A simple, powerful AI Agent for receipt management and spending analysis using Google's Gemini AI.
 
 ##  Features
 
