@@ -1,0 +1,11 @@
+.env
+
+# data
+data/test_results/
+
+# logs
+logs/
+
+__pycache__/
+cfp/   
+backups/

@@ -1,0 +1,4 @@
+google-generativeai
+google-cloud-firestore
+pillow
+python-dotenv
