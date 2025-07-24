@@ -154,7 +154,7 @@ class ReceiptOCRPipeline:
             return receipt
             
         except Exception as e:
-            logger.error(f"OCR extraction error: {e}")
+            logger.error(f"OCR extraction error: {e}",exc_info=True)
             # Return a basic receipt with error info
             return Receipt(
                 vendor_name="Unknown Vendor",

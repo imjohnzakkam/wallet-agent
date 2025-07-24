@@ -1,16 +1,17 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 import os
 from dotenv import load_dotenv
 
 from ai_pipeline.pipeline import AIPipeline
+from backend.api.receipts import create_wallet_receipt
 
 # Load environment variables
 load_dotenv()
 
 # Get project configuration
-PROJECT_ID = os.getenv("PROJECT_ID")
-LOCATION = os.getenv("LOCATION")
+PROJECT_ID = os.getenv("PROJECT_ID", "astute-encoder-466713-b4")
+LOCATION = os.getenv("LOCATION", "us-central1")
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -44,6 +45,27 @@ async def insights_endpoint(request: InsightsRequest):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/upload-image")
+async def upload_image(file: UploadFile = File(...), user_id: str = Form(...)):
+    try:
+        image_bytes = await file.read()
+        result = pipeline.process_receipt(media_content=image_bytes, media_type="image", user_id=user_id)
+        receipt_data = result.get("receipt_data", {})
+        # Extract fields for wallet
+        vendor = receipt_data.get("vendor_name", "Unknown Vendor")
+        category = receipt_data.get("category", "Other")
+        amount = f"{receipt_data.get('amount', 0)} {receipt_data.get('currency', 'INR')}"
+        date_time = str(receipt_data.get("date_time", ""))
+        # Split date and time if possible
+        if " " in date_time:
+            date, time = date_time.split(" ", 1)
+        else:
+            date, time = date_time, ""
+        wallet_link = create_wallet_receipt(vendor, category, amount, date, time)
+        return {"ocr_result": result, "wallet_link": wallet_link}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process image and create wallet pass: {str(e)}")
 
 @app.get("/")
 def read_root():
