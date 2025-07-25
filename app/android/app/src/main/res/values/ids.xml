@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="vendorName" type="id">vendorName</item>
+    <item name="billCategory" type="id">billCategory</item>
+    <item name="receiptTime" type="id">receiptTime</item>
+</resources>
