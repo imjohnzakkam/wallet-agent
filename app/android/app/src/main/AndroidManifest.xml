@@ -23,8 +23,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".ReceiptReviewActivity" />
-        <activity android:name=".AskActivity" />
+<!--        <activity android:name=".ReceiptReviewActivity" />-->
+<!--        <activity android:name=".AskActivity" />-->
+        <activity android:name=".CameraActivity" />
     </application>
 
 </manifest>

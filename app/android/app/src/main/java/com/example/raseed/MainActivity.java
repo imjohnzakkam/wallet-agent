@@ -1,43 +1,26 @@
 package com.example.raseed;
 
-import android.Manifest;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Bundle;
-import android.util.Log;
+import android.view.Menu;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.camera.core.*;
-import androidx.camera.lifecycle.ProcessCameraProvider;
-import androidx.camera.view.PreviewView;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
+import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-
-import com.google.common.util.concurrent.ListenableFuture;
 
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-
 import okhttp3.*;
 
 public class MainActivity extends AppCompatActivity {
@@ -53,7 +36,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        inputMessage = findViewById(R.id.inputMessage);
+        inputMessage = findViewById(R.id.messageInput);
         sendButton = findViewById(R.id.sendButton);
         chatRecyclerView = findViewById(R.id.chatRecyclerView);
 
@@ -71,7 +54,34 @@ public class MainActivity extends AppCompatActivity {
                 sendToBackend(userMessage);
             }
         });
+
+        Toolbar toolbar = findViewById(R.id.chatToolbar);
+        setSupportActionBar(toolbar);
+
+        toolbar.setOnMenuItemClickListener(item -> {
+            if (item.getItemId() == R.id.capture_receipt) {
+                // Launch CameraActivity
+                Intent intent = new Intent(MainActivity.this, CameraActivity.class);
+                startActivity(intent);
+                return true;
+            }
+            else if (item.getItemId() == R.id.upload_receipt) {
+                // Handle file picker
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.setType("image/*");
+                startActivityForResult(Intent.createChooser(intent, "Select Picture"), 101);
+                return true;
+            }
+            return false;
+        });
     }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.chat_menu, menu);
+        return true;
+    }
+
 
     private void sendToBackend(String message) {
         // Replace with your real backend API
