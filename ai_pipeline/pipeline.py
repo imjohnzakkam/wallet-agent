@@ -90,7 +90,7 @@ class ReceiptOCRPipeline:
     def __init__(self, project_id: str, location: str):
         logger.info("Initializing ReceiptOCRPipeline with Vertex AI")
         vertexai.init(project=project_id, location=location)
-        self.model = GenerativeModel('gemini-1.5-flash-001')
+        self.model = GenerativeModel('gemini-2.5-pro')
         logger.info("ReceiptOCRPipeline initialized successfully")
         
     def extract_receipt_data(self, media_content: bytes, media_type: str = "image") -> Receipt:

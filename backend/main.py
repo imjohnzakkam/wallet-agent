@@ -10,7 +10,7 @@ from backend.api.receipts import create_wallet_receipt
 load_dotenv()
 
 # Get project configuration
-PROJECT_ID = os.getenv("PROJECT_ID", "astute-encoder-466713-b4")
+PROJECT_ID = os.getenv("PROJECT_ID", "steady-anagram-466916-t6")
 LOCATION = os.getenv("LOCATION", "us-central1")
 
 # Initialize FastAPI app
@@ -20,7 +20,7 @@ app = FastAPI()
 if not PROJECT_ID or not LOCATION:
     raise RuntimeError("PROJECT_ID and LOCATION must be set in .env file")
 
-pipeline = AIPipeline(project_id=PROJECT_ID, location=LOCATION)
+pipeline = AIPipeline(project_id=PROJECT_ID, location=LOCATION, firestore_credentials=os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 
 # Pydantic models for request bodies
 class QueryRequest(BaseModel):
