@@ -35,6 +35,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -190,8 +191,8 @@ public class MainActivity extends AppCompatActivity implements ChatAdapter.OnMes
                 input.put("text", text);
 
                 JSONObject voice = new JSONObject();
-                voice.put("languageCode", "en-US");
-                voice.put("name", "en-US-Neural2-F"); // Female voice, you can change this
+                voice.put("languageCode", "en-IN");
+                voice.put("name", "en-IN-Chirp-HD-O"); // Female voice, you can change this
                 voice.put("ssmlGender", "FEMALE");
 
                 JSONObject audioConfig = new JSONObject();
@@ -465,8 +466,16 @@ public class MainActivity extends AppCompatActivity implements ChatAdapter.OnMes
                 JSONObject config = new JSONObject();
                 config.put("encoding", "LINEAR16");
                 config.put("sampleRateHertz", SAMPLE_RATE);
-                config.put("languageCode", "en-US"); // Change to your preferred language
+                config.put("languageCode", "en-IN"); // Hindi as primary
                 config.put("enableAutomaticPunctuation", true);
+
+// Alternative languages (this part definitely works)
+                JSONArray alternativeLanguages = new JSONArray();
+                alternativeLanguages.put("hi-IN");
+                alternativeLanguages.put("te-IN");
+                alternativeLanguages.put("ta-IN");
+                alternativeLanguages.put("bn-IN");
+                config.put("alternativeLanguageCodes", alternativeLanguages);
 
                 JSONObject audio = new JSONObject();
                 audio.put("content", audioBase64);
@@ -534,9 +543,7 @@ public class MainActivity extends AppCompatActivity implements ChatAdapter.OnMes
                                         // Send to backend
                                         sendToBackend(transcript);
 
-                                        Toast.makeText(MainActivity.this,
-                                                "Voice message sent: " + transcript,
-                                                Toast.LENGTH_SHORT).show();
+                                        Toast.makeText(MainActivity.this, "Voice message sent" , Toast.LENGTH_SHORT).show();
                                     });
                                 } else {
                                     runOnUiThread(() -> {
@@ -559,7 +566,7 @@ public class MainActivity extends AppCompatActivity implements ChatAdapter.OnMes
                                 Toast.makeText(MainActivity.this,
                                         "Speech API error: " + response.code(),
                                         Toast.LENGTH_SHORT).show();
-                                Log.e("MainActivity", "Speech API error: " + response.code());
+                                Log.e("MainActivity", "Speech API error: " + response.body());
                             });
                         }
                     }
