@@ -224,42 +224,89 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+//    private void sendToBackend(String message) {
+//        new Thread(() -> {
+//            try {
+//                URL url = new URL("https://wallet-agent-203063692416.asia-south1.run.app/query");
+//                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+//                conn.setRequestMethod("POST");
+//                conn.setRequestProperty("Content-Type", "application/json");
+//                conn.setDoOutput(true);
+//
+//                JSONObject json = new JSONObject();
+//                json.put("query", message);
+//                json.put("user_id", "123");
+//
+//                OutputStream os = conn.getOutputStream();
+//                os.write(json.toString().getBytes("UTF-8"));
+//                os.flush();
+//                os.close();
+//
+//                BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+//                StringBuilder response = new StringBuilder();
+//                String line;
+//                while ((line = in.readLine()) != null) {
+//                    response.append(line);
+//                }
+//                in.close();
+//
+//                JSONObject responseJson = new JSONObject(response.toString());
+//                String llmResponse = responseJson.getString("llm_response");
+//                String walletLink = responseJson.optString("wallet_link", "");
+//
+//                runOnUiThread(() -> {
+//                    chatMessages.add(new ChatMessage(llmResponse, false, walletLink));
+//                    chatAdapter.notifyItemInserted(chatMessages.size() - 1);
+//                    chatRecyclerView.smoothScrollToPosition(chatMessages.size() - 1);
+//                });
+//
+//            } catch (Exception e) {
+//                e.printStackTrace();
+//                runOnUiThread(() -> {
+//                    chatMessages.add(new ChatMessage("Error: " + e.getMessage(), false));
+//                    chatAdapter.notifyItemInserted(chatMessages.size() - 1);
+//                });
+//            }
+//        }).start();
+//    }
+
     private void sendToBackend(String message) {
-        // Replace with your real backend API
         new Thread(() -> {
             try {
-                URL url = new URL("https://your-backend.com/api/chat");
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json");
-                conn.setDoOutput(true);
+                // Simulate network delay
+                Thread.sleep(1000);
 
-                JSONObject json = new JSONObject();
-                json.put("query", message);
+                // Mocked response based on input message
+                String llmResponse;
+                String walletLink;
 
-                OutputStream os = conn.getOutputStream();
-                os.write(json.toString().getBytes());
-                os.close();
-
-                BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                StringBuilder response = new StringBuilder();
-                String line;
-                while ((line = in.readLine()) != null) {
-                    response.append(line);
+                if (message.toLowerCase().contains("receipt")) {
+                    // Scenario 1: wallet link present
+                    llmResponse = "Here are your recent grocery receipts from Big Bazaar and Reliance Fresh.";
+                    walletLink = "https://pay.google.com/gp/v/save/receipt-pass-id";
+                } else {
+                    // Scenario 2: wallet link absent
+                    llmResponse = "You spent ₹2,340 on groceries last week, mainly at Big Bazaar and FreshMart.";
+                    walletLink = "";
                 }
-                in.close();
 
-                String reply = response.toString();
+                // Update UI on main thread
                 runOnUiThread(() -> {
-                    chatMessages.add(new ChatMessage(reply, false));
+                    chatMessages.add(new ChatMessage(llmResponse, false, walletLink));
                     chatAdapter.notifyItemInserted(chatMessages.size() - 1);
                     chatRecyclerView.smoothScrollToPosition(chatMessages.size() - 1);
                 });
 
             } catch (Exception e) {
                 e.printStackTrace();
+                runOnUiThread(() -> {
+                    chatMessages.add(new ChatMessage("Error: " + e.getMessage(), false));
+                    chatAdapter.notifyItemInserted(chatMessages.size() - 1);
+                });
             }
         }).start();
     }
+
+
 }
 
