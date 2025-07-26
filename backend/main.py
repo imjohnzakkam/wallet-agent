@@ -17,7 +17,7 @@ load_dotenv()
 PROJECT_ID = os.getenv("PROJECT_ID", "steady-anagram-466916-t6")
 LOCATION = os.getenv("LOCATION", "us-central1")
 CREDENTIALS = service_account.Credentials.from_service_account_file(
-    "/app/backend/config/service-account.json",
+    "backend/config/service-account.json",
     scopes=["https://www.googleapis.com/auth/cloud-platform"]
 )
 
@@ -28,7 +28,7 @@ app = FastAPI()
 if not PROJECT_ID or not LOCATION:
     raise RuntimeError("PROJECT_ID and LOCATION must be set in .env file")
 
-pipeline = AIPipeline(project_id=PROJECT_ID, location=LOCATION, credentials=CREDENTIALS)
+pipeline = AIPipeline(project_id=PROJECT_ID, location=LOCATION, credentials=CREDENTIALS, firebase_client=firebase_client)
 
 # Pydantic models for request bodies
 class QueryRequest(BaseModel):

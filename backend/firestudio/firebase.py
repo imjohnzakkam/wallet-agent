@@ -2,10 +2,17 @@ import os
 import firebase_admin
 from firebase_admin import firestore
 from firebase_admin import credentials
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 class FirebaseClient():
     def __init__(self):
-        cred = credentials.Certificate("/app/backend/config/service-account.json")
+        # Get credentials from environment variable
+        credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "backend/config/service-account.json")
+        
+        cred = credentials.Certificate(credentials_path)
         # Check if Firebase is already initialized
         try:
             app = firebase_admin.get_app()

@@ -9,7 +9,7 @@ import sys
 import json
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Load environment variables
 def load_env():
@@ -27,7 +27,7 @@ def load_env():
                     env_vars[key] = value
     
     # Override with system environment variables
-    for key in ['GEMINI_API_KEY', 'FIRESTORE_CREDENTIALS_PATH', 'FIRESTORE_PROJECT_ID']:
+    for key in ['FIRESTORE_CREDENTIALS_PATH', 'FIRESTORE_PROJECT_ID']:
         if key in os.environ:
             env_vars[key] = os.environ[key]
     
@@ -168,6 +168,91 @@ def test_chat_feature(pipeline, user_id: str, logger):
         'timestamp': datetime.now().isoformat()
     }
 
+def test_chat_assistant_with_db(pipeline, user_id: str, logger):
+    """Test Chat Assistant feature with database integration"""
+    logger.info("Starting Chat Assistant test with DB")
+
+    print(f"\n{'='*50}")
+    print("TESTING CHAT ASSISTANT WITH FIRESTORE")
+    print(f"{'='*50}")
+
+    test_queries = [
+        "How much did I spend on groceries in the last 30 days?",
+        "Show me all my receipts from 'Test Vendor'",
+        "Create a shopping list for pasta.",
+        "What was my total spending last week?",
+        "Find receipts over 100"
+    ]
+
+    # First, let's add a dummy receipt to ensure our queries have something to find
+    try:
+        logger.info("Adding a dummy receipt for testing purposes.")
+        dummy_receipt_data = {
+            'user_id': user_id,
+            'vendor_name': 'Test Vendor',
+            'category': 'grocery',
+            'date_time': datetime.now() - timedelta(days=5),
+            'amount': 150.0,
+            'subtotal': 140.0,
+            'tax': 10.0,
+            'currency': 'INR',
+            'payment_method': 'card',
+            'language': 'en',
+            'items': [{'name': 'Test Item', 'quantity': 1, 'unit': 'pcs', 'price': 140.0}],
+            'created_at': datetime.now()
+        }
+        pipeline.db.add_update_recipt_details(user_id=user_id, recipt_doc=dummy_receipt_data)
+        logger.info("Dummy receipt added successfully.")
+    except Exception as e:
+        logger.error(f"Failed to add dummy receipt: {e}")
+
+
+    results = []
+    total_time = 0
+
+    for i, query in enumerate(test_queries, 1):
+        print(f"\nQuery {i}: {query}")
+        logger.info(f"Testing query {i}: {query}")
+
+        start_time = datetime.now()
+        result = pipeline.handle_query(query, user_id)
+        query_time = (datetime.now() - start_time).total_seconds()
+        total_time += query_time
+
+        wallet_pass = result['wallet_pass']
+
+        print(f"Pass Type: {wallet_pass['pass_type']}")
+        print(f"Title: {wallet_pass['title']}")
+        print(f"Subtitle: {wallet_pass['subtitle']}")
+        print(f"Query time: {query_time:.2f} seconds")
+
+        # You can add more detailed checks on the results here if needed
+        print("Details:", json.dumps(wallet_pass.get('details', {}), indent=2, default=str))
+
+
+        results.append({
+            'query': query,
+            'success': True, # Add more robust success criteria
+            'result': result,
+            'query_time': query_time,
+            'timestamp': datetime.now().isoformat()
+        })
+
+        logger.info(f"Query {i} completed - Type: {wallet_pass['pass_type']}, Time: {query_time:.2f}s")
+
+    print(f"\nTotal chat testing time with DB: {total_time:.2f} seconds")
+    logger.info(f"Chat Assistant test with DB completed - {len(results)} queries, Total time: {total_time:.2f}s")
+
+    return {
+        'test_type': 'chat_with_db',
+        'queries_count': len(results),
+        'success': True,
+        'results': results,
+        'total_time': total_time,
+        'timestamp': datetime.now().isoformat()
+    }
+
+
 def test_analytics_feature(pipeline, user_id: str, logger):
     """Test Analytics feature"""
     logger.info("Starting Analytics test")
@@ -271,8 +356,7 @@ def main():
     
     parser = argparse.ArgumentParser(description='Test Wallet Agent AI Pipeline')
     parser.add_argument('--image', type=str, help='Path to test image')
-    parser.add_argument('--api-key', type=str, help='Gemini API key')
-    parser.add_argument('--test', choices=['ocr', 'chat', 'analytics', 'all'], 
+    parser.add_argument('--test', choices=['ocr', 'chat', 'analytics', 'all', 'chat_db'], 
                        default='all', help='Which features to test')
     
     args = parser.parse_args()
@@ -284,14 +368,31 @@ def main():
     # Load environment
     env = load_env()
     
-    # Get API key
-    api_key = args.api_key or env.get('GEMINI_API_KEY')
-    if not api_key:
-        error_msg = "No API key provided. Set GEMINI_API_KEY in .env file or pass --api-key"
+    # Get Project ID - This is required for Vertex AI
+    project_id = env.get('FIRESTORE_PROJECT_ID')
+    if not project_id:
+        error_msg = "No Project ID provided. Set FIRESTORE_PROJECT_ID in your .env file."
         logger.error(error_msg)
         print(f"Error: {error_msg}")
         sys.exit(1)
+
+    # Get Firestore credentials (optional)
+    firestore_creds_path = env.get('FIRESTORE_CREDENTIALS_PATH')
+    credentials = None
+    use_db = False
     
+    if firestore_creds_path:
+        if os.path.exists(firestore_creds_path):
+            from google.oauth2 import service_account
+            credentials = service_account.Credentials.from_service_account_file(firestore_creds_path)
+            use_db = True
+            logger.info("Using service account credentials for Firestore and Vertex AI.")
+        else:
+            logger.warning(f"Firestore credentials file not found at {firestore_creds_path}. DB tests will be skipped.")
+            firestore_creds_path = None # Ensure it's None if not found
+    else:
+        logger.warning("FIRESTORE_CREDENTIALS_PATH not set. Using Application Default Credentials for Vertex AI. DB tests will be skipped.")
+
     # Get test directories
     test_input_dir = env.get('TEST_INPUT_DIR', 'data/test_images')
     test_user_id = env.get('TEST_USER_ID', 'test_user_123')
@@ -300,26 +401,54 @@ def main():
     print("Initializing Wallet Agent AI Pipeline...")
     logger.info("Initializing pipeline")
     
-    from pipeline import AgentPipeline
+    from ai_pipeline.pipeline import AIPipeline
     
-    pipeline = AgentPipeline(api_key)
-    logger.info("Pipeline initialized successfully")
+    try:
+        if use_db:
+            from backend.firestudio.firebase import FirebaseClient
+            firebase_client = FirebaseClient()
+            pipeline = AIPipeline(
+                project_id=project_id,
+                location="us-central1",
+                credentials=credentials,
+                firebase_client=firebase_client
+            )
+        else:
+            pipeline = AIPipeline(
+                project_id=project_id,
+                location="us-central1",
+                credentials=credentials
+            )
+        logger.info("Pipeline initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize AI Pipeline: {e}", exc_info=True)
+        print(f"Error: Could not initialize AI Pipeline. Please check your GCP authentication and project setup.")
+        sys.exit(1)
     
     # Run tests
     test_results = []
     
-    if args.test == 'ocr' or args.test == 'all':
+    if args.test in ['ocr', 'all']:
         image_path = args.image or os.path.join(test_input_dir, 'img_0.jpeg')
         result = test_ocr_feature(pipeline, image_path, test_user_id, logger)
         if result:
             test_results.append(result)
     
-    if args.test == 'chat' or args.test == 'all':
+    if args.test in ['chat', 'all']:
+        # Run the non-DB chat test regardless
         result = test_chat_feature(pipeline, test_user_id, logger)
         if result:
             test_results.append(result)
-    
-    if args.test == 'analytics' or args.test == 'all':
+
+    if args.test in ['chat_db', 'all']:
+        if use_db:
+            result = test_chat_assistant_with_db(pipeline, test_user_id, logger)
+            if result:
+                test_results.append(result)
+        else:
+            logger.warning("Skipping DB-dependent chat test ('chat_db') as Firestore is not configured.")
+
+    if args.test in ['analytics', 'all']:
         result = test_analytics_feature(pipeline, test_user_id, logger)
         if result:
             test_results.append(result)
