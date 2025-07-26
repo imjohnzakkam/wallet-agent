@@ -1,9 +1,13 @@
+from dataclasses import asdict
+import datetime
+import re
+from dotenv.main import logger
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 import os
 from dotenv import load_dotenv
 
-from ai_pipeline.pipeline import AIPipeline
+from ai_pipeline.pipeline import AIPipeline, Receipt, ReceiptCategory
 from backend.api.receipts import create_wallet_receipt
 from backend.firestudio.firebase import FirebaseClient
 
@@ -69,22 +73,31 @@ async def upload_image(file: UploadFile = File(...), user_id: str = Form(default
 @app.post("/add-to-wallet")
 async def add_to_wallet(request: AddToWalletRequest):
     try:
+        
+        receipt_doc = firebase_client.get_receipt_by_user_id_receipt_id(receipt_id=request.receipt_id,user_id=request.user_id)
+        receipt_object = Receipt.from_dict(receipt_doc)
+        receipt_object.amount = float(request.amount)
+        receipt_object.vendor_name = request.vendor
+        receipt_object.category = ReceiptCategory(request.category)
+        receipt_object.date_time = datetime.datetime.strptime(f"{request.date} {request.time}", "%Y-%m-%d %H:%M:%S")
+
         wallet_link = create_wallet_receipt(
-            request.vendor,
-            request.category,
-            request.amount,
-            request.date,
-            request.time
+            receipt_object            
         )
         
+        receipt_dict = asdict(receipt_object)
+        receipt_dict.pop('raw_text', None)
+        receipt_dict['category'] = receipt_object.category.value
+
         # Update the receipt with the wallet link
         firebase_client.add_update_receipt_details(
             user_id=request.user_id,
             receipt_id=request.receipt_id,
-            receipt_doc={"wallet_link": wallet_link}
+            receipt_doc=receipt_dict
         )
         return {"wallet_link": wallet_link}
     except Exception as e:
+        logger.info("Error in adding to wallet",e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to create wallet pass: {str(e)}")
 
 @app.get("/")

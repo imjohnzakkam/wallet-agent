@@ -56,6 +56,19 @@ class ReceiptItem:
     price: float
     category: str = ""
 
+    @classmethod
+    def from_dict(cls, data: dict) -> 'ReceiptItem':
+        """
+        Create a ReceiptItem instance from a dictionary.
+        """
+        return cls(
+            name=data.get('name', ''),
+            quantity=float(data.get('quantity', 0)),
+            unit=data.get('unit', ''),
+            price=float(data.get('price', 0)),
+            category=data.get('category', '')
+        )
+
 @dataclass
 class Receipt:
     vendor_name: str
@@ -69,6 +82,45 @@ class Receipt:
     currency: str = "INR"
     language: str = "en"
     raw_text: str = ""
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> 'Receipt':
+        """
+        Create a Receipt instance from a dictionary.
+        Handles type conversions for category, date_time, and items.
+        """
+        # Convert items to ReceiptItem objects
+        items = []
+        if data.get('items'):
+            for item_data in data['items']:
+                items.append(ReceiptItem.from_dict(item_data))
+        
+        # Convert category string to ReceiptCategory enum
+        category_str = data.get('category', 'other').lower()
+        
+        category = ReceiptCategory(category_str)
+
+        
+        # Convert date_time string to datetime object if it's a string
+        date_time = data.get('date_time')
+        if isinstance(date_time, str):
+            date_time = datetime.fromisoformat(date_time.replace('Z', '+00:00'))
+        elif not isinstance(date_time, datetime):
+            date_time = datetime.now()
+        
+        return Receipt(
+            vendor_name=data.get('vendor_name', 'Unknown'),
+            category=category,
+            date_time=date_time,
+            amount=float(data.get('amount', 0)),
+            items=items,
+            subtotal=float(data.get('subtotal', 0)),
+            tax=float(data.get('tax', 0)),
+            payment_method=data.get('payment_method', ''),
+            currency=data.get('currency', 'INR'),
+            language=data.get('language', 'en'),
+            raw_text=data.get('raw_text', '')
+        )
     
 @dataclass
 class WalletPass:

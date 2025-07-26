@@ -95,10 +95,13 @@ class FirebaseClient():
             receipts.append(receipt_data)
         
         return receipts
+    
+    def get_receipt_by_user_id_receipt_id(self,receipt_id , user_id='123'):
+        return self.db.collection(USERS).document(user_id).collection(RECEIPTS).document(receipt_id).get().to_dict()
 
-firebase_client = FirebaseClient()
-x = firebase_client.add_update_receipt_details(user_id = 'prahladha', receipt_doc = {'a':'bb', 'b':'c'})
-firebase_client.add_update_receipt_details(user_id = 'prahladha', receipt_id = x, receipt_doc = {'a':'bbbbb', 'd':'cc'})
-print(firebase_client.get_receipts_by_timerange(user_id = 'prahladha'))
+# firebase_client = FirebaseClient()
+# x = firebase_client.add_update_receipt_details(user_id = 'prahladha', receipt_doc = {'a':'bb', 'b':'c'})
+# firebase_client.add_update_receipt_details(user_id = 'prahladha', receipt_id = x, receipt_doc = {'a':'bbbbb', 'd':'cc'})
+# print(firebase_client.get_receipts_by_timerange(user_id = 'prahladha'))
 
-print(x)
+# print(x)
