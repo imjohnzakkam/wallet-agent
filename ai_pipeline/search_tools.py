@@ -71,6 +71,12 @@ class WebSearchTool:
 
     def search(self, query: str) -> str:
         """Performs a web search for the given query using Gemini with Google Search tool."""
+        """
+        args:
+            query: str
+        returns:
+            str: The search results
+        """
         logger.info(f"Performing web search for: '{query}'")
         
         if self.use_new_sdk:
