@@ -599,7 +599,16 @@ class AIPipeline:
         
         # Centralized Vertex AI initialization with the correct credentials
         vertexai.init(project=project_id, location=location, credentials=firebase_client.google_cloud_creds)
-        
+        scoped_credentials = firebase_client.google_cloud_creds
+        if credentials:
+            # Re-scope credentials to ensure they have cloud-platform access.
+            # This is necessary for services like Vertex AI.
+            try:
+                scoped_credentials = credentials.with_scopes([
+                    "https://www.googleapis.com/auth/cloud-platform"
+                ])
+            except AttributeError:
+                logger.warning("Credentials object does not support re-scoping. Proceeding with original credentials.")
         self.db = firebase_client
         self.ocr = ReceiptOCRPipeline(project_id, location, firebase_client)
         self.chat = ReceiptChatAssistant(project_id, location, self.db)
