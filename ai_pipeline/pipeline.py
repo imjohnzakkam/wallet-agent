@@ -10,7 +10,6 @@ from dataclasses import dataclass, asdict
 from enum import Enum
 import vertexai
 from vertexai.generative_models import GenerativeModel, Part
-import base64
 from pathlib import Path
 
 from backend.firestudio.firebase import FirebaseClient
@@ -18,10 +17,8 @@ from backend.firestudio.firebase import FirebaseClient
 # Setup logging
 def setup_logging():
     """Setup logging configuration"""
-    # Create logs directory
     Path("logs").mkdir(exist_ok=True)
     
-    # Configure logging
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -88,9 +85,9 @@ class WalletPass:
 
 # 1. OCR Pipeline Component
 class ReceiptOCRPipeline:
-    def __init__(self, project_id: str, location: str, credentials):
+    def __init__(self, project_id: str, location: str):
         logger.info("Initializing ReceiptOCRPipeline with Vertex AI")
-        vertexai.init(project=project_id, location=location, credentials=credentials)
+        vertexai.init(project=project_id, location=location)
         self.model = GenerativeModel('gemini-2.5-pro')
         logger.info("ReceiptOCRPipeline initialized successfully")
         
@@ -106,18 +103,18 @@ class ReceiptOCRPipeline:
             "category": "grocery/restaurant/shopping/fuel/pharmacy/electronics/utilities/other",
             "date": "YYYY-MM-DD",
             "time": "HH:MM",
-            "amount": total amount as float,
-            "subtotal": subtotal as float,
-            "tax": tax amount as float,
+            "amount": "total amount as float",
+            "subtotal": "subtotal as float",
+            "tax": "tax amount as float",
             "currency": "currency code (INR/USD/etc)",
             "payment_method": "cash/card/upi/other",
             "language": "ISO language code of the receipt",
             "items": [
                 {
                     "name": "item name",
-                    "quantity": quantity as float,
+                    "quantity": "quantity as float",
                     "unit": "unit (pcs/kg/l/etc)",
-                    "price": price per unit as float
+                    "price": "price per unit as float"
                 }
             ]
         }
@@ -129,24 +126,19 @@ class ReceiptOCRPipeline:
         try:
             start_time = datetime.now()
             
-            # Create content based on media type
             if media_type == "image":
-                logger.debug("Processing image with Gemini")
                 image_part = Part.from_data(media_content, mime_type="image/jpeg")
                 response = self.model.generate_content([prompt, image_part])
-            else:  # video
-                logger.debug("Processing video with Gemini")
+            else:
                 video_part = Part.from_data(media_content, mime_type="video/mp4")
                 response = self.model.generate_content([prompt, video_part])
             
             processing_time = (datetime.now() - start_time).total_seconds()
             logger.info(f"Gemini processing completed in {processing_time:.2f} seconds")
             
-            # Parse JSON from response
             json_str = self._extract_json(response.text)
             data = json.loads(json_str)
             
-            # Convert to Receipt object
             receipt = self._parse_receipt_data(data)
             receipt.raw_text = response.text
             
@@ -155,8 +147,7 @@ class ReceiptOCRPipeline:
             return receipt
             
         except Exception as e:
-            logger.error(f"OCR extraction error: {e}",exc_info=True)
-            # Return a basic receipt with error info
+            logger.error(f"OCR extraction error: {e}", exc_info=True)
             return Receipt(
                 vendor_name="Unknown Vendor",
                 category=ReceiptCategory.OTHER,
@@ -171,34 +162,18 @@ class ReceiptOCRPipeline:
     def _extract_json(self, text: str) -> str:
         """Extract JSON from Gemini response"""
         json_match = re.search(r'\{[\s\S]*\}', text)
-        if json_match:
-            return json_match.group()
-        return "{}"
+        return json_match.group(0) if json_match else "{}"
     
     def _parse_receipt_data(self, data: dict) -> Receipt:
         """Convert extracted data to Receipt object"""
-        # Parse date and time
         date_str = data.get("date", datetime.now().strftime("%Y-%m-%d"))
         time_str = data.get("time", "00:00")
         date_time = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
         
-        # Parse items
-        items = []
-        for item_data in data.get("items", []):
-            items.append(ReceiptItem(
-                name=item_data.get("name", ""),
-                quantity=float(item_data.get("quantity", 1)),
-                unit=item_data.get("unit", "pcs"),
-                price=float(item_data.get("price", 0))
-            ))
+        items = [ReceiptItem(**item_data) for item_data in data.get("items", [])]
         
-        # Parse category
         category_str = data.get("category", "other").lower()
-        category = ReceiptCategory.OTHER
-        for cat in ReceiptCategory:
-            if cat.value == category_str:
-                category = cat
-                break
+        category = next((cat for cat in ReceiptCategory if cat.value == category_str), ReceiptCategory.OTHER)
         
         return Receipt(
             vendor_name=data.get("vendor_name", "Unknown"),
@@ -215,11 +190,11 @@ class ReceiptOCRPipeline:
 
 # 2. AI Chat Assistant Component
 class ReceiptChatAssistant:
-    def __init__(self, project_id: str, location: str, db=None):
+    def __init__(self, project_id: str, location: str, db_client: FirebaseClient):
         logger.info("Initializing ReceiptChatAssistant with Vertex AI")
         vertexai.init(project=project_id, location=location)
         self.model = GenerativeModel('gemini-2.5-flash')
-        self.db = db
+        self.db = db_client
         logger.info("ReceiptChatAssistant initialized successfully")
         
     def process_query(self, query: str, user_id: str) -> WalletPass:
@@ -227,19 +202,17 @@ class ReceiptChatAssistant:
         
         logger.info(f"Processing query for user {user_id}: {query}")
         
-        # Classify query intent
         intent, params = self._classify_query(query)
         logger.debug(f"Query classified as: {intent} with params: {params}")
         
-        # Route to appropriate handler
-        if intent == "spending_analysis":
-            result = self._handle_spending_analysis(query, params, user_id)
-        elif intent == "shopping_list":
-            result = self._handle_shopping_list(query, params, user_id)
-        elif intent == "show_receipt":
-            result = self._handle_show_receipt(query, params, user_id)
-        else:
-            result = self._handle_complex_query(query, user_id)
+        handler_map = {
+            "spending_analysis": self._handle_spending_analysis,
+            "shopping_list": self._handle_shopping_list,
+            "show_receipt": self._handle_show_receipt,
+        }
+        
+        handler = handler_map.get(intent, self._handle_complex_query)
+        result = handler(query, params, user_id)
         
         logger.info(f"Query processed successfully - Pass type: {result.pass_type.value}, Title: {result.title}")
         return result
@@ -251,46 +224,12 @@ class ReceiptChatAssistant:
         Analyze the user's query to understand their intent and extract relevant parameters for querying a receipt database.
         The current date is {datetime.now().strftime('%Y-%m-%d')}.
 
-        The available intents are:
-        - "show_receipt": The user wants to view one or more specific receipts.
-        - "spending_analysis": The user is asking for an analysis of their spending habits (e.g., totals, trends, breakdowns).
-        - "shopping_list": The user wants to create a shopping list, possibly based on past purchases.
-        - "other": The query does not fit into the above categories.
-
-        For the detected intent, extract the following parameters if they appear in the query.
-        - "start_date": Start date for the query in "YYYY-MM-DD" format.
-        - "end_date": End date for the query in "YYYY-MM-DD" format.
-        - "category": The spending category (e.g., "grocery", "restaurant", "fuel").
-        - "vendor_name": The name of the store or vendor.
-        - "amount_condition": A condition on the total amount (e.g., {{"operator": "gt", "value": 1000}} for "over 1000", supported operators: gt, lt, eq).
-        - "query_text": Any other text that can be used for a general search.
-
-        Examples:
-        - Query: "How much did I spend on groceries last month?"
-          - intent: "spending_analysis"
-          - params: {{"category": "grocery", "start_date": "...", "end_date": "..."}} (fill in dates for last month)
-        - Query: "Show me receipts from Starbucks"
-          - intent: "show_receipt"
-          - params: {{"vendor_name": "Starbucks"}}
-        - Query: "what did I buy from Target yesterday over $50"
-            - intent: "show_receipt"
-            - params: {{"vendor_name": "Target", "start_date": "...", "end_date": "...", "amount_condition": {{"operator": "gt", "value": 50}}}}
+        Available intents: "show_receipt", "spending_analysis", "shopping_list", "other".
+        Extract parameters: "start_date", "end_date", "category", "vendor_name", "amount_condition", "query_text".
 
         User Query: "{query}"
 
-        Return your analysis as a JSON object with the following structure:
-        {{
-            "intent": "...",
-            "params": {{
-                "start_date": "YYYY-MM-DD",
-                "end_date": "YYYY-MM-DD",
-                "category": "...",
-                "vendor_name": "...",
-                "amount_condition": {{...}},
-                "query_text": "..."
-            }}
-        }}
-        Provide empty strings or null for parameters that are not found in the query. If no time range is specified, do not return start_date and end_date.
+        Return your analysis as a JSON object: {{"intent": "...", "params": {{...}}}}
         """
         
         try:
@@ -308,45 +247,25 @@ class ReceiptChatAssistant:
             return []
 
         try:
-            # Changed to query user's subcollection of receipts
-            query_ref = self.db.collection('users').document(user_id).collection('receipts')
-
-            # Time range filter
-            if params.get("start_date"):
-                start_date = datetime.strptime(params["start_date"], "%Y-%m-%d")
-                query_ref = query_ref.where('date_time', '>=', start_date)
+            start_date = params.get("start_date")
+            end_date = params.get("end_date")
             
-            if params.get("end_date"):
-                # Add one day to end_date to make it inclusive
-                end_date = datetime.strptime(params["end_date"], "%Y-%m-%d") + timedelta(days=1)
-                query_ref = query_ref.where('date_time', '<', end_date)
-
-            # Category filter
+            receipts = self.db.get_receipts_by_timerange(user_id, start_date, end_date)
+            
+            # Further filtering in Python
             if params.get("category"):
-                query_ref = query_ref.where('category', '==', params["category"])
-
-            # Vendor filter
+                receipts = [r for r in receipts if r.get('category') == params["category"]]
             if params.get("vendor_name"):
-                query_ref = query_ref.where('vendor_name', '==', params["vendor_name"])
-            
-            # Amount filter
+                receipts = [r for r in receipts if r.get('vendor_name') == params["vendor_name"]]
             if params.get("amount_condition"):
                 cond = params["amount_condition"]
                 op = cond.get("operator")
-                val = cond.get("value")
-                if op and isinstance(val, (int, float)):
-                    firestore_op_map = {"gt": ">", "lt": "<", "eq": "=="}
-                    if op in firestore_op_map:
-                        query_ref = query_ref.where('amount', firestore_op_map[op], val)
+                val = float(cond.get("value", 0))
+                op_map = {"gt": lambda x: x > val, "lt": lambda x: x < val, "eq": lambda x: x == val}
+                if op in op_map:
+                    receipts = [r for r in receipts if op_map[op](r.get('amount', 0))]
 
-            receipts_stream = query_ref.stream()
-            receipts = []
-            for doc in receipts_stream:
-                receipt = doc.to_dict()
-                receipt['id'] = doc.id
-                receipts.append(receipt)
-
-            logger.info(f"Fetched {len(receipts)} receipts for user {user_id} with params {params}")
+            logger.info(f"Fetched and filtered {len(receipts)} receipts for user {user_id} with params {params}")
             return receipts
 
         except Exception as e:
@@ -355,25 +274,14 @@ class ReceiptChatAssistant:
 
     def _handle_spending_analysis(self, query: str, params: Dict, user_id: str) -> WalletPass:
         """Handle spending analysis queries"""
-        logger.debug("Handling spending analysis query")
-        
         receipts = self._fetch_receipts(user_id, params)
         if not receipts:
-            return WalletPass(
-                pass_type=PassType.ANALYTICS,
-                title="Spending Analysis",
-                subtitle="No receipts found for your query.",
-                details={"query": query}
-            )
+            return WalletPass(pass_type=PassType.ANALYTICS, title="Spending Analysis", subtitle="No receipts found.", details={"query": query})
 
-        total_spending = sum(r['amount'] for r in receipts)
-        receipt_count = len(receipts)
-        average_spending = total_spending / receipt_count if receipt_count > 0 else 0
-        
+        total_spending = sum(r.get('amount', 0) for r in receipts)
         by_category = {}
         for r in receipts:
-            cat = r.get('category', 'other')
-            by_category[cat] = by_category.get(cat, 0) + r['amount']
+            by_category[r.get('category', 'other')] = by_category.get(r.get('category', 'other'), 0) + r.get('amount', 0)
 
         return WalletPass(
             pass_type=PassType.ANALYTICS,
@@ -381,50 +289,28 @@ class ReceiptChatAssistant:
             subtitle=f"Analysis for: {query}",
             details={
                 "total_spending": total_spending,
-                "average_spending": average_spending,
-                "receipt_count": receipt_count,
+                "receipt_count": len(receipts),
                 "by_category": by_category,
-                "query": query,
-                "params": params
             }
         )
     
     def _handle_shopping_list(self, query: str, params: Dict, user_id: str) -> WalletPass:
         """Generate shopping lists based on query"""
-        logger.debug("Handling shopping list query")
-
         today = datetime.now().date()
-        first_day_of_this_month = today.replace(day=1)
-        last_day_of_last_month = first_day_of_this_month - timedelta(days=1)
-        first_day_of_last_month = last_day_of_last_month.replace(day=1)
-
+        last_month_end = today.replace(day=1) - timedelta(days=1)
+        last_month_start = last_month_end.replace(day=1)
+        
         receipts = self._fetch_receipts(user_id, {
-            "start_date": first_day_of_last_month.strftime("%Y-%m-%d"),
-            "end_date": last_day_of_last_month.strftime("%Y-%m-%d"),
+            "start_date": last_month_start.strftime("%Y-%m-%d"),
+            "end_date": last_month_end.strftime("%Y-%m-%d"),
         })
         
-        recent_items = []
-        for r in receipts:
-            for item in r.get('items', []):
-                recent_items.append(item['name'])
-        
-        recent_items_str = ", ".join(list(set(recent_items))[:20])
+        recent_items_str = ", ".join(list(set(item['name'] for r in receipts for item in r.get('items', [])))[:20])
 
         prompt = f"""
-        A user wants to create a shopping list. Their query is: "{query}".
-        
-        Here are some items they have purchased recently: {recent_items_str}.
-        
-        Based on their query and purchase history, generate a list of items for their shopping list.
-        Include name, quantity, and an estimated price in INR for each item.
-
-        Return the list as a JSON object with this structure:
-        {{
-            "items": [
-                {{"name": "...", "quantity": "...", "estimated_price": ...}}
-            ],
-            "total_estimate": ...
-        }}
+        User query: "{query}".
+        Recent items: {recent_items_str}.
+        Generate a shopping list in JSON: {{"items": [{{"name": "...", "quantity": "...", "estimated_price": ...}}], "total_estimate": ...}}
         """
 
         try:
@@ -432,87 +318,47 @@ class ReceiptChatAssistant:
             list_data = json.loads(self._extract_json(response.text))
         except Exception as e:
             logger.error(f"Failed to generate shopping list with Gemini: {e}")
-            list_data = {
-                "items": [{"name": item, "quantity": "1", "estimated_price": 0} for item in query.split(" ")],
-                "total_estimate": 0
-            }
+            list_data = {"items": [], "total_estimate": 0}
 
         return WalletPass(
             pass_type=PassType.SHOPPING_LIST,
             title="Your Shopping List",
             subtitle=f"Generated from: '{query}'",
-            details={
-                "items": list_data.get("items", []),
-                "total_estimate": list_data.get("total_estimate", 0),
-                "query": query
-            },
+            details=list_data,
             valid_until=datetime.now() + timedelta(days=7)
         )
     
     def _handle_show_receipt(self, query: str, params: Dict, user_id: str) -> WalletPass:
         """Handle showing specific receipts"""
-        logger.debug("Handling show receipt query")
         receipts = self._fetch_receipts(user_id, params)
 
         if not receipts:
-            return WalletPass(
-                pass_type=PassType.RECEIPT,
-                title="Receipt Search",
-                subtitle=f"No results for: {query}",
-                details={"query": query, "params": params, "count": 0}
-            )
-
-        total_amount = sum(r['amount'] for r in receipts)
-        
-        receipt_summaries = []
-        for r in receipts:
-            receipt_summaries.append({
-                "receipt_id": r.get('id'),
-                "vendor_name": r.get('vendor_name'),
-                "amount": r.get('amount'),
-                "date_time": r.get('date_time').isoformat() if r.get('date_time') else None,
-            })
+            return WalletPass(pass_type=PassType.RECEIPT, title="Receipt Search", subtitle="No results.", details={"query": query})
 
         return WalletPass(
             pass_type=PassType.RECEIPT,
             title="Receipt Search",
-            subtitle=f"Found {len(receipts)} receipts matching your query",
+            subtitle=f"Found {len(receipts)} receipts",
             details={
-                "receipt_summaries": receipt_summaries,
-                "total_amount": total_amount,
-                "count": len(receipts),
-                "query": query,
-                "params": params
+                "receipt_summaries": [{k: r[k] for k in ('receipt_id', 'vendor_name', 'amount', 'date_time')} for r in receipts],
+                "total_amount": sum(r.get('amount', 0) for r in receipts),
             }
         )
     
-    def _handle_complex_query(self, query: str, user_id: str) -> WalletPass:
+    def _handle_complex_query(self, query: str, params: Dict, user_id: str) -> WalletPass:
         """Handle complex queries using full context"""
-        logger.debug("Handling complex query")
-        return WalletPass(
-            pass_type=PassType.ANALYTICS,
-            title="Query Results",
-            subtitle="Analysis complete",
-            details={
-                "insights": ["Insight 1", "Insight 2"],
-                "data": {"key": "value"},
-                "suggestions": ["Suggestion 1", "Suggestion 2"],
-                "query": query
-            }
-        )
+        return WalletPass(pass_type=PassType.ANALYTICS, title="Query Results", subtitle="Analysis complete", details={"query": query})
     
     def _extract_json(self, text: str) -> str:
         """Extract JSON from text"""
         json_match = re.search(r'\{[\s\S]*\}', text)
-        if json_match:
-            return json_match.group()
-        return "{}"
+        return json_match.group(0) if json_match else "{}"
 
 # 3. Analysis Pipeline Component
 class ReceiptAnalysisPipeline:
-    def __init__(self, db=None, project_id: str = None, location: str = None):
+    def __init__(self, db_client: FirebaseClient, project_id: str = None, location: str = None):
         logger.info("Initializing ReceiptAnalysisPipeline")
-        self.db = db
+        self.db = db_client
         if project_id and location:
             vertexai.init(project=project_id, location=location)
         logger.info("ReceiptAnalysisPipeline initialized successfully")
@@ -521,110 +367,41 @@ class ReceiptAnalysisPipeline:
         """Generate periodic insights and alerts"""
         logger.info(f"Generating insights for user {user_id}")
         
-        passes = []
-        
-        # Monthly spending summary
-        monthly_pass = WalletPass(
-            pass_type=PassType.ANALYTICS,
-            title=f"{datetime.now().strftime('%B')} Spending Summary",
-            subtitle="₹12,450 ↑15.3%",
-            details={
-                "total_spending": 12450,
-                "change_percent": 15.3,
-                "top_category": "grocery",
-                "receipt_count": 45
-            }
-        )
-        passes.append(monthly_pass)
-        
-        # Spending alerts
-        alert_pass = WalletPass(
-            pass_type=PassType.ALERT,
-            title="High Spending Alert",
-            subtitle="₹3,500 spent today",
-            details={
-                "alert_type": "high_spending",
-                "amount": 3500,
-                "average_daily": 450
-            }
-        )
-        passes.append(alert_pass)
-        
-        logger.info(f"Generated {len(passes)} insights for user {user_id}")
-        return passes
+        # This is a mock implementation. A real implementation would fetch and analyze data.
+        return [
+            WalletPass(pass_type=PassType.ANALYTICS, title=f"Monthly Summary", subtitle="Sample insight"),
+            WalletPass(pass_type=PassType.ALERT, title="Spending Alert", subtitle="Sample alert"),
+        ]
 
 # Main Integration Class
 class AIPipeline:
-    def __init__(self, project_id: str, location: str, credentials=None, firebase_client: "FirebaseClient" = None):
+    def __init__(self, project_id: str, location: str, firebase_client: FirebaseClient):
         logger.info("Initializing AIPipeline")
         
-        # Initialize Firestore
-        if firebase_client:
-            self.db = firebase_client
-            logger.info("Using provided FirebaseClient")
-        else:
-            self.db = FirebaseClient()
-            logger.info("Initialized new FirebaseClient")
-        
-        # Initialize components
-        self.ocr = ReceiptOCRPipeline(project_id, location, credentials)
-        self.chat = ReceiptChatAssistant(project_id, location, self.db.db)
-        self.analytics = ReceiptAnalysisPipeline(self.db.db, project_id, location)
+        self.db = firebase_client
+        self.ocr = ReceiptOCRPipeline(project_id, location)
+        self.chat = ReceiptChatAssistant(project_id, location, self.db)
+        self.analytics = ReceiptAnalysisPipeline(self.db, project_id, location)
         
         logger.info("AIPipeline initialized successfully")
     
     def process_receipt(self, media_content: bytes, media_type: str, user_id: str) -> Dict[str, Any]:
         """Process a receipt and store in database"""
-        logger.info(f"Processing receipt for user {user_id} ({len(media_content)} bytes)")
+        logger.info(f"Processing receipt for user {user_id}")
         
-        # Extract receipt data
         receipt = self.ocr.extract_receipt_data(media_content, media_type)
         
-        # Store in Firestore if available
-        receipt_id = "mock_receipt_id"
-        receipt_data_to_store = {
-            'user_id': user_id,
-            'vendor_name': receipt.vendor_name,
-            'category': receipt.category.value,
-            'date_time': receipt.date_time,
-            'amount': receipt.amount,
-            'subtotal': receipt.subtotal,
-            'tax': receipt.tax,
-            'currency': receipt.currency,
-            'payment_method': receipt.payment_method,
-            'language': receipt.language,
-            'items': [asdict(item) for item in receipt.items],
-            'created_at': datetime.now()
-        }
-        if self.db:
-            try:
-                receipt_id = self.db.add_update_recipt_details(user_id=user_id, recipt_doc=receipt_data_to_store)
-                logger.info(f"Receipt stored in Firestore with ID: {receipt_id}")
-            except Exception as e:
-                logger.error(f"Failed to store receipt in Firestore: {e}")
+        receipt_data_to_store = asdict(receipt)
+        receipt_data_to_store.pop('raw_text', None)
+        receipt_data_to_store['category'] = receipt.category.value
+
+        receipt_id = self.db.add_update_receipt_details(user_id, receipt_doc=receipt_data_to_store)
+        logger.info(f"Receipt stored with ID: {receipt_id}")
         
-        # Create wallet pass
-        pass_data = WalletPass(
-            pass_type=PassType.RECEIPT,
-            title=f"{receipt.vendor_name}",
-            subtitle=f"{receipt.date_time.strftime('%b %d, %Y')} - ₹{receipt.amount:.2f}",
-            details={
-                'receipt_id': receipt_id,
-                'vendor': receipt.vendor_name,
-                'amount': receipt.amount,
-                'items_count': len(receipt.items),
-                'category': receipt.category.value
-            }
-        )
-        
-        result = {
+        return {
             'receipt_id': receipt_id,
             'receipt_data': receipt_data_to_store,
-            'wallet_pass': asdict(pass_data)
         }
-        
-        logger.info(f"Receipt processing completed - ID: {receipt_id}, Vendor: {receipt.vendor_name}, Amount: ₹{receipt.amount:.2f}")
-        return result
     
     def handle_query(self, query: str, user_id: str) -> Dict[str, Any]:
         """Handle user query and return wallet pass"""
@@ -632,25 +409,17 @@ class AIPipeline:
         
         pass_data = self.chat.process_query(query, user_id)
         
-        # Store pass in database if available
-        pass_id = "mock_pass_id"
-        if self.db:
-            try:
-                pass_dict = asdict(pass_data)
-                pass_dict['user_id'] = user_id
-                pass_dict['pass_type'] = pass_data.pass_type.value
-                pass_id = self.db.add_update_pass_details(user_id=user_id, pass_doc=pass_dict)
-                logger.info(f"Query pass stored in Firestore with ID: {pass_id}")
-            except Exception as e:
-                logger.error(f"Failed to store query pass in Firestore: {e}")
+        pass_dict = asdict(pass_data)
+        pass_dict['user_id'] = user_id
+        pass_dict['pass_type'] = pass_data.pass_type.value
         
-        result = {
+        pass_id = self.db.add_update_pass_details(user_id, pass_doc=pass_dict)
+        logger.info(f"Query pass stored with ID: {pass_id}")
+        
+        return {
             'pass_id': pass_id,
-            'wallet_pass': asdict(pass_data)
+            'wallet_pass': pass_dict
         }
-        
-        logger.info(f"Query handling completed - ID: {pass_id}, Type: {pass_data.pass_type.value}")
-        return result
     
     def generate_insights(self, user_id: str) -> List[Dict[str, Any]]:
         """Generate analytical insights for user"""
@@ -664,17 +433,8 @@ class AIPipeline:
             pass_dict['user_id'] = user_id
             pass_dict['pass_type'] = pass_data.pass_type.value
             
-            pass_id = "mock_insight_id"
-            if self.db:
-                try:
-                    pass_id = self.db.add_update_pass_details(user_id=user_id, pass_doc=pass_dict)
-                except Exception as e:
-                    logger.error(f"Failed to store insight pass in Firestore: {e}")
-            
-            results.append({
-                'pass_id': pass_id,
-                'wallet_pass': pass_dict
-            })
+            pass_id = self.db.add_update_pass_details(user_id, pass_doc=pass_dict)
+            results.append({'pass_id': pass_id, 'wallet_pass': pass_dict})
         
         logger.info(f"Insights generation completed - {len(results)} insights generated")
         return results

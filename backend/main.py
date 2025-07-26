@@ -1,5 +1,4 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from google.oauth2 import service_account
 from pydantic import BaseModel
 import os
 from dotenv import load_dotenv
@@ -8,27 +7,22 @@ from ai_pipeline.pipeline import AIPipeline
 from backend.api.receipts import create_wallet_receipt
 from backend.firestudio.firebase import FirebaseClient
 
-firebase_client = FirebaseClient()
-
 # Load environment variables
 load_dotenv()
 
 # Get project configuration
 PROJECT_ID = os.getenv("PROJECT_ID", "steady-anagram-466916-t6")
 LOCATION = os.getenv("LOCATION", "us-central1")
-CREDENTIALS = service_account.Credentials.from_service_account_file(
-    "backend/config/service-account.json",
-    scopes=["https://www.googleapis.com/auth/cloud-platform"]
-)
 
 # Initialize FastAPI app
 app = FastAPI()
 
-# Initialize AI Pipeline
-if not PROJECT_ID or not LOCATION:
-    raise RuntimeError("PROJECT_ID and LOCATION must be set in .env file")
-
-pipeline = AIPipeline(project_id=PROJECT_ID, location=LOCATION, credentials=CREDENTIALS, firebase_client=firebase_client)
+# Initialize AI Pipeline and Firebase Client
+try:
+    firebase_client = FirebaseClient()
+    pipeline = AIPipeline(project_id=PROJECT_ID, location=LOCATION, firebase_client=firebase_client)
+except Exception as e:
+    raise RuntimeError(f"Failed to initialize AI Pipeline or Firebase Client: {e}")
 
 # Pydantic models for request bodies
 class QueryRequest(BaseModel):
@@ -68,9 +62,7 @@ async def upload_image(file: UploadFile = File(...), user_id: str = Form(default
     try:
         image_bytes = await file.read()
         result = pipeline.process_receipt(media_content=image_bytes, media_type="image", user_id=user_id)
-        recipt_id = firebase_client.add_update_recipt_details(user_id = user_id, recipt_doc = result)
-        # Only return OCR result, do not create wallet receipt here
-        return {"ocr_result": result, "recipt_id": recipt_id}
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process image: {str(e)}")
 
@@ -85,11 +77,15 @@ async def add_to_wallet(request: AddToWalletRequest):
             request.time
         )
         
-        firebase_client.add_update_recipt_details(user_id=request.user_id, recipt_id=request.receipt_id, recipt_doc=request.model_dump())
+        # Update the receipt with the wallet link
+        firebase_client.add_update_receipt_details(
+            user_id=request.user_id,
+            receipt_id=request.receipt_id,
+            receipt_doc={"wallet_link": wallet_link}
+        )
         return {"wallet_link": wallet_link}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create wallet pass: {str(e)}")
-   
 
 @app.get("/")
 def read_root():
