@@ -451,8 +451,6 @@ class AIPipeline:
         )
         
         result = {
-            'receipt_id': receipt_id,
-            'receipt_data': {
                 'user_id': user_id,
                 'vendor_name': receipt.vendor_name,
                 'category': receipt.category.value,
@@ -465,8 +463,6 @@ class AIPipeline:
                 'language': receipt.language,
                 'items': [asdict(item) for item in receipt.items],
                 'created_at': datetime.now()
-            },
-            'wallet_pass': asdict(pass_data)
         }
         
         logger.info(f"Receipt processing completed - ID: {receipt_id}, Vendor: {receipt.vendor_name}, Amount: ₹{receipt.amount:.2f}")

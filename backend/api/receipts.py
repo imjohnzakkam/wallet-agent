@@ -5,7 +5,7 @@ import uuid
 
 # --- CONFIGURATION ---
 SERVICE_ACCOUNT_FILE = '/Users/shyam/Downloads/google_wallet_key.json'
-ISSUER_ID = '3388000000022967260'
+ISSUER_ID = '3388000000022968883'
 PASS_CLASS_ID = f"{ISSUER_ID}.9937af69-6694-4681-a557-7fa3b4a09c70"
 
 # Authenticate and create the Wallet service

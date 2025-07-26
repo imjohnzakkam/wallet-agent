@@ -23,7 +23,7 @@ app = FastAPI()
 if not PROJECT_ID or not LOCATION:
     raise RuntimeError("PROJECT_ID and LOCATION must be set in .env file")
 
-pipeline = AIPipeline(project_id=PROJECT_ID, location=LOCATION, firestore_credentials=os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+pipeline = AIPipeline(project_id=PROJECT_ID, location=LOCATION)
 
 # Pydantic models for request bodies
 class QueryRequest(BaseModel):
