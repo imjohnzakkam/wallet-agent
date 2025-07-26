@@ -11,8 +11,13 @@ class FirebaseClient():
         self.db = firestore.client(database_id="walletagent")
 
     def add_update_recipt_details(self, user_id = '123', recipt_id = None, recipt_doc = None):
+        
         if recipt_id :
             doc_ref = self.db.collection("users").document(user_id).collection("recipts").document(recipt_id)
+            doc_dict = doc_ref.get().to_dict()
+            for key, value in recipt_doc.items():
+                doc_dict[key] = value
+            recipt_doc = doc_dict
         else :
             doc_ref = self.db.collection("users").document(user_id).collection("recipts").document()
         doc_ref.set(recipt_doc)
@@ -35,4 +40,6 @@ class FirebaseClient():
         return doc_ref.id
 
 firebase_client = FirebaseClient()
-print (firebase_client.add_update_recipt_details(recipt_doc = {'a':'b'}))
+
+# x = firebase_client.add_update_recipt_details(user_id = '123', recipt_doc = {'a':'b', 'b':'c'})
+# firebase_client.add_update_recipt_details(user_id = '123', recipt_id = x, recipt_doc = {'b':'reddy', 'c':'shyam'})

@@ -5,6 +5,9 @@ from dotenv import load_dotenv
 
 from ai_pipeline.pipeline import AIPipeline
 from backend.api.receipts import create_wallet_receipt
+from backend.firestudio.firebase import FirebaseClient
+
+firebase_client = FirebaseClient()
 
 # Load environment variables
 load_dotenv()
@@ -31,7 +34,7 @@ class InsightsRequest(BaseModel):
     user_id: str
 
 class AddToWalletRequest(BaseModel):
-    user_id: str
+    user_id: str = '123'
     receipt_id: str
     vendor: str
     category: str
@@ -56,12 +59,13 @@ async def insights_endpoint(request: InsightsRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/upload-image")
-async def upload_image(file: UploadFile = File(...), user_id: str = Form(...)):
+async def upload_image(file: UploadFile = File(...), user_id: str = Form(default='123')):
     try:
         image_bytes = await file.read()
         result = pipeline.process_receipt(media_content=image_bytes, media_type="image", user_id=user_id)
+        recipt_id = firebase_client.add_update_recipt_details(user_id = user_id, recipt_doc = result)
         # Only return OCR result, do not create wallet receipt here
-        return {"ocr_result": result}
+        return {"ocr_result": result, "recipt_id": recipt_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process image: {str(e)}")
 
@@ -75,6 +79,8 @@ async def add_to_wallet(request: AddToWalletRequest):
             request.date,
             request.time
         )
+        
+        firebase_client.add_update_recipt_details(user_id=request.user_id, recipt_id=request.receipt_id, recipt_doc=request.model_dump())
         return {"wallet_link": wallet_link}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create wallet pass: {str(e)}")
