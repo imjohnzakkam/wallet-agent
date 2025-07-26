@@ -18,6 +18,7 @@ from vertexai.generative_models import (
     Tool,
 )
 from pathlib import Path
+from google.oauth2 import service_account
 
 from backend.firestudio.firebase import FirebaseClient
 from ai_pipeline import analysis_tools
