@@ -31,7 +31,7 @@ except Exception as e:
 # Pydantic models for request bodies
 class QueryRequest(BaseModel):
     query: str
-    user_id: str
+    user_id: str = '123'
 
 class InsightsRequest(BaseModel):
     user_id: str
@@ -49,6 +49,14 @@ class AddToWalletRequest(BaseModel):
 async def query_endpoint(request: QueryRequest):
     try:
         result = pipeline.handle_query(query=request.query, user_id=request.user_id)
+        
+        # Store the query and its response in Firestore
+        firebase_client.add_user_query(
+            user_id=request.user_id,
+            query=request.query,
+            llm_response=str(result)  # Assuming result is the string response
+        )
+        
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

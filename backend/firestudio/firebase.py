@@ -3,6 +3,7 @@ import firebase_admin
 from firebase_admin import firestore
 from firebase_admin import credentials
 from dotenv import load_dotenv
+from datetime import timezone
 
 # Load environment variables from .env file
 load_dotenv()
@@ -11,6 +12,7 @@ load_dotenv()
 USERS = "users"
 RECEIPTS = "receipts"
 PASSES = "passes"
+QUERIES = "queries"
 
 class FirebaseClient():
     _instance = None
@@ -68,6 +70,18 @@ class FirebaseClient():
 
     def add_update_pass_details(self, user_id: str, pass_id: str = None, pass_doc: dict = None):
         return self.add_or_update_document([USERS, user_id, PASSES], pass_id, pass_doc)
+
+    def add_user_query(self, user_id: str, query: str, llm_response: str):
+        """
+        Stores user query and its LLM response in Firestore.
+        """
+        from datetime import datetime
+        query_data = {
+            'query': query,
+            'llm_response': llm_response,
+            'timestamp': datetime.now(timezone.utc)
+        }
+        return self.add_or_update_document([USERS, user_id, QUERIES], data=query_data)
 
     def get_receipts_by_timerange(self, user_id='123', start_timestamp=None, end_timestamp=None):
         from datetime import datetime
