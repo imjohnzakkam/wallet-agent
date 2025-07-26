@@ -1,0 +1,30 @@
+Initializing Wallet Agent AI Pipeline...
+
+==================================================
+TESTING OCR FEATURE
+==================================================
+Processing image: data/test_images/img_0.jpeg
+Image size: 271858 bytes
+
+Receipt ID: mock_receipt_id
+Vendor: California Burrito
+Category: restaurant
+Date: 2025-07-22 13:42:00
+Amount: ₹293.00
+Items: 1
+Processing time: 30.39 seconds
+
+Items:
+  1. Chicken (Crispy) Salad - 1.0 pcs - ₹279.00
+
+==================================================
+TESTING CHAT ASSISTANT
+==================================================
+
+Query 1: How much did I spend on groceries this month?
+Pass Type: PassType.ANALYTICS
+Title: Spending Analysis
+Subtitle: No receipts found for your query.
+Query time: 18.15 seconds
+
+Query 2: Create a shopping list for making biryani
