@@ -69,6 +69,14 @@ async def insights_endpoint(request: InsightsRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/queries")
+async def get_queries_endpoint(user_id: str = '123'):
+    try:
+        queries = firebase_client.get_user_queries(user_id=user_id)
+        return {"queries": queries}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/upload-image")
 async def upload_image(file: UploadFile = File(...), user_id: str = Form(default='123')):
     try:

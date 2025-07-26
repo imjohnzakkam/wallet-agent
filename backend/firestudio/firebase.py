@@ -83,6 +83,23 @@ class FirebaseClient():
         }
         return self.add_or_update_document([USERS, user_id, QUERIES], data=query_data)
 
+    def get_user_queries(self, user_id: str):
+        """
+        Retrieves all queries for a user, sorted by timestamp in ascending order.
+        """
+        queries_ref = self.db.collection(USERS).document(user_id).collection(QUERIES)
+        docs = queries_ref.order_by('timestamp', direction=firestore.Query.ASCENDING).stream()
+        
+        queries = []
+        for doc in docs:
+            query_data = doc.to_dict()
+            query_data['query_id'] = doc.id
+            # Convert timestamp to ISO 8601 string format
+            query_data['timestamp'] = query_data['timestamp'].isoformat()
+            queries.append(query_data)
+            
+        return queries
+
     def get_receipts_by_timerange(self, user_id='123', start_timestamp=None, end_timestamp=None):
         from datetime import datetime
 
