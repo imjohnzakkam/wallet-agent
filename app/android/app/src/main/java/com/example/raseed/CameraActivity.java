@@ -6,7 +6,9 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 import android.widget.Button;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -22,6 +24,7 @@ import androidx.core.content.ContextCompat;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
+import com.google.gson.annotations.SerializedName;
 
 import java.io.File;
 import java.io.IOException;
@@ -31,6 +34,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.Executors;
 
 import okhttp3.Call;
@@ -42,48 +46,61 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
-// Define a data class to hold the parsed OCR result
-class OcrData implements Serializable {
-    String user_id;
-    String vendor_name;
-    String category;
-    String date_time;
-    double amount;
-    double subtotal;
-    double tax;
-    String currency;
-    String payment_method;
-    String language;
-    List<Item> items;
-    String created_at;
+// Top-level response
+class OcrResponse implements Serializable {
+    @SerializedName("receipt_data")
+    public OcrResult ocrResult;
 
-    static class Item implements Serializable {
-        String name;
-        double quantity;
-        String unit;
-        double price;
-        String category;
+    @SerializedName("receipt_id")
+    public String receiptId;
 
-        @Override
-        public String toString() {
-            return "Item{" +
-                    "name='" + name + '\'' +
-                    ", quantity=" + quantity +
-                    ", unit='" + unit + '\'' +
-                    ", price=" + price +
-                    ", category='" + category + '\'' +
-                    '}';
-        }
+    public static class OcrResult implements Serializable {
+        @SerializedName("vendor_name")
+        public String vendorName;
+
+        @SerializedName("category")
+        public String category;
+
+        @SerializedName("date_time")
+        public String dateTime;
+
+        @SerializedName("amount")
+        public double amount;
+
+        @SerializedName("subtotal")
+        public double subtotal;
+
+        @SerializedName("tax")
+        public double tax;
+
+        @SerializedName("currency")
+        public String currency;
+
+        @SerializedName("payment_method")
+        public String paymentMethod;
+
+        @SerializedName("language")
+        public String language;
+
+        @SerializedName("items")
+        public List<OcrItem> items;
     }
 
-    @Override
-    public String toString() {
-        return "OcrData{" +
-                "vendor_name='" + vendor_name + '\'' +
-                ", date_time='" + date_time + '\'' +
-                ", amount=" + amount +
-                // Add other fields as needed for logging or display
-                '}';
+    public static class OcrItem implements Serializable {
+        @SerializedName("name")
+        public String name;
+
+        @SerializedName("quantity")
+        public double quantity;
+
+        @SerializedName("unit")
+        public String unit;
+
+        @SerializedName("price")
+        public double price;
+
+        @SerializedName("category")
+        public String category;
     }
 }
 
@@ -95,12 +112,15 @@ public class CameraActivity extends AppCompatActivity {
     private PreviewView previewView;
     private ImageCapture imageCapture;
     private ExecutorService cameraExecutor;
+    private ProgressBar progressBar;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_camera);
 
+        progressBar = findViewById(R.id.progressBar);
         previewView = findViewById(R.id.previewView);
         Button captureButton = findViewById(R.id.captureButton);
 
@@ -168,16 +188,6 @@ public class CameraActivity extends AppCompatActivity {
                         Uri savedUri = Uri.fromFile(photoFile);
                         Log.d(TAG, "Photo capture succeeded: " + savedUri.toString());
                         uploadImage(photoFile);
-
-                        runOnUiThread(() -> {
-                            Toast.makeText(CameraActivity.this, "Photo saved", Toast.LENGTH_SHORT).show();
-
-                            // Optional: Return photo URI to MainActivity or another screen
-                            Intent resultIntent = new Intent();
-                            // resultIntent.setData(savedUri); // No longer returning URI, as it's uploaded
-                            setResult(RESULT_OK, resultIntent);
-                            finish();
-                        });
                     }
 
                     @Override
@@ -188,7 +198,14 @@ public class CameraActivity extends AppCompatActivity {
                 });
     }
     private void uploadImage(File imageFile) {
-        OkHttpClient client = new OkHttpClient();
+        Log.i(TAG, "uploadImage :: request received");
+        runOnUiThread(() -> progressBar.setVisibility(View.VISIBLE));
+
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS) // Connection timeout
+                .readTimeout(30, TimeUnit.SECONDS)    // Read timeout
+                .writeTimeout(30, TimeUnit.SECONDS)   // Write timeout
+                .build();
 
         RequestBody requestBody = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
@@ -201,51 +218,73 @@ public class CameraActivity extends AppCompatActivity {
                 .post(requestBody)
                 .build();
 
+        Log.i(TAG, "uploadImage :: requestBody formed");
+
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                Log.e(TAG, "Image upload failed: " + e.getMessage(), e);
-                runOnUiThread(() -> Toast.makeText(CameraActivity.this, "Upload failed: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                runOnUiThread(() -> {
+                    Log.i(TAG, "uploadImage :: request failed " + e.getMessage());
+                    progressBar.setVisibility(View.GONE);
+                    Toast.makeText(CameraActivity.this, "Upload failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                });
             }
 
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                String responseBodyStr = response.body() != null ? response.body().string() : "Empty response";
+
                 if (response.isSuccessful()) {
-                    String responseBody = response.body() != null ? response.body().string() : "Empty response";
-                    Log.d(TAG, "Image upload successful: " + responseBody);
-                    runOnUiThread(() -> {
-                        Toast.makeText(CameraActivity.this, "Upload successful", Toast.LENGTH_SHORT).show();
-                        try {
-                            Gson gson = new Gson();
-                            // Assuming the top-level structure is a map with "ocr_result" and "receipt_id"
-                            Map<String, Object> apiResponse = gson.fromJson(responseBody, Map.class);
-                            Map<String, Object> ocrResultMap = (Map<String, Object>) apiResponse.get("ocr_result");
+                    Log.i(TAG, "Image upload successful: " + responseBodyStr);
+                    try {
+                        Gson gson = new Gson();
+                        OcrResponse ocrResponse = gson.fromJson(responseBodyStr, OcrResponse.class);
 
-                            // Convert the ocr_result map back to JSON string to parse it into OcrData object
-                            String ocrResultJson = gson.toJson(ocrResultMap);
-                            OcrData ocrData = gson.fromJson(ocrResultJson, OcrData.class);
-
-                            Log.d(TAG, "Parsed OCR Data: " + ocrData.toString());
-
-                            Intent intent = new Intent(CameraActivity.this, ReceiptReviewActivity.class);
-                            intent.putExtra("ocrData", ocrData);
-                            startActivity(intent);
-                            finish(); // Finish CameraActivity after navigating
-                        } catch (JsonSyntaxException e) {
-                            Log.e(TAG, "Error parsing JSON response: " + e.getMessage(), e);
-                            Toast.makeText(CameraActivity.this, "Error processing OCR data", Toast.LENGTH_LONG).show();
+                        if (ocrResponse == null || ocrResponse.ocrResult == null) {
+                            runOnUiThread(() -> {
+                                progressBar.setVisibility(View.GONE);
+                                Toast.makeText(CameraActivity.this, "OCR result missing in response", Toast.LENGTH_LONG).show();
+                            });
+                            return;
                         }
-                    });
+
+                        runOnUiThread(() -> {
+                            progressBar.setVisibility(View.GONE);
+                            Intent reviewIntent = new Intent(CameraActivity.this, ReceiptReviewActivity.class);
+                            reviewIntent.putExtra("vendor", ocrResponse.ocrResult.vendorName);
+                            reviewIntent.putExtra("category", ocrResponse.ocrResult.category);
+                            reviewIntent.putExtra("date", ocrResponse.ocrResult.dateTime.split("T")[0]);
+                            reviewIntent.putExtra("time", ocrResponse.ocrResult.dateTime.split("T")[1]);
+                            reviewIntent.putExtra("amount", String.valueOf(ocrResponse.ocrResult.amount));
+                            reviewIntent.putExtra("receipt_id", ocrResponse.receiptId);
+                            reviewIntent.putExtra("user_id", "123");
+
+                            startActivity(reviewIntent);
+                            finish();
+                        });
+
+                    } catch (JsonSyntaxException e) {
+                        Log.e(TAG, "Error parsing JSON response: " + e.getMessage(), e);
+                        runOnUiThread(() -> {
+                            progressBar.setVisibility(View.GONE);
+                            Toast.makeText(CameraActivity.this, "Error processing OCR data", Toast.LENGTH_LONG).show();
+                        });
+                    }
                 } else {
-                    runOnUiThread(() -> Toast.makeText(CameraActivity.this, "Upload failed: " + response.code(), Toast.LENGTH_LONG).show());
+                    runOnUiThread(() -> {
+                        progressBar.setVisibility(View.GONE);
+                        Toast.makeText(CameraActivity.this, "Upload failed: " + response.code(), Toast.LENGTH_LONG).show();
+                    });
                 }
-                // Clean up the temporary file after upload attempt
+
+                // Cleanup temp image file
                 if (imageFile.exists()) {
                     imageFile.delete();
                 }
             }
         });
     }
+
 
     @Override
     protected void onDestroy() {

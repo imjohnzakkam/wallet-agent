@@ -15,6 +15,10 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.IOException;
 import java.util.Locale;
 
 import okhttp3.*;
@@ -93,11 +97,64 @@ public class ReceiptReviewActivity extends AppCompatActivity {
         String time = receiptTime.getText().toString();
         String amount = totalAmount.getText().toString();
 
-        // Build your request body and make the API call here using Retrofit or OkHttp
-        // TODO : Build request body here
-        // You can use JSONObject or a request class depending on your setup
+        String receiptId = getIntent().getStringExtra("receipt_id");
+        String userId = "123"; // or retrieve from SharedPreferences/auth system
+
+        OkHttpClient client = new OkHttpClient();
+
+        String json = "{"
+                + "\"receipt_id\":\"" + receiptId + "\","
+                + "\"user_id\":\"" + userId + "\","
+                + "\"vendor\":\"" + vendor + "\","
+                + "\"category\":\"" + category + "\","
+                + "\"date\":\"" + date + "\","
+                + "\"time\":\"" + time + "\","
+                + "\"amount\":\"" + amount + "\""
+                + "}";
+
+        RequestBody body = RequestBody.create(json, MediaType.parse("application/json"));
+        Request request = new Request.Builder()
+                .url("https://wallet-agent-203063692416.asia-south1.run.app/add-to-wallet")
+                .post(body)
+                .build();
 
         Toast.makeText(this, "Sending to wallet...", Toast.LENGTH_SHORT).show();
-        // Call your API here
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                runOnUiThread(() -> Toast.makeText(ReceiptReviewActivity.this, "Failed to send: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (!response.isSuccessful()) {
+                    runOnUiThread(() -> Toast.makeText(ReceiptReviewActivity.this, "Server error: " + response.code(), Toast.LENGTH_LONG).show());
+                    return;
+                }
+
+                String responseBody = response.body().string();
+                try {
+                    JSONObject jsonObject = new JSONObject(responseBody);
+                    String walletLink = jsonObject.optString("wallet_link");
+
+                    runOnUiThread(() -> {
+                        Toast.makeText(ReceiptReviewActivity.this, "Receipt added to wallet!", Toast.LENGTH_LONG).show();
+
+                        // Optionally open the link in browser
+                        if (!walletLink.isEmpty()) {
+                            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(walletLink));
+                            startActivity(intent);
+                        }
+
+                        // Finish activity or return to MainActivity
+                        finish();
+                    });
+                } catch (JSONException e) {
+                    runOnUiThread(() -> Toast.makeText(ReceiptReviewActivity.this, "Invalid response", Toast.LENGTH_LONG).show());
+                }
+            }
+        });
     }
+
 }
