@@ -4,13 +4,17 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.AudioFormat;
+import android.media.AudioManager;
 import android.media.AudioRecord;
+import android.media.AudioTrack;
 import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Base64;
 import android.util.Log;
+import android.view.ContextMenu;
 import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -50,7 +54,7 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements ChatAdapter.OnMessageLongClickListener {
 
     private EditText inputMessage;
     private Button sendButton;
@@ -74,9 +78,14 @@ public class MainActivity extends AppCompatActivity {
     private int bufferSize;
     private ByteArrayOutputStream audioDataStream;
 
-    // GCP Speech-to-Text API settings
+    // GCP API settings
     private static final String GCP_API_KEY = "AIzaSyB_F8_C6WHzuZgz8ugUnFatDTwak8sSFGs"; // Replace with your actual API key
     private static final String SPEECH_TO_TEXT_URL = "https://speech.googleapis.com/v1/speech:recognize?key=" + GCP_API_KEY;
+    private static final String TEXT_TO_SPEECH_URL = "https://texttospeech.googleapis.com/v1/text:synthesize?key=" + GCP_API_KEY;
+
+    // Audio playback
+    private AudioTrack audioTrack;
+    private boolean isPlaying = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -90,7 +99,7 @@ public class MainActivity extends AppCompatActivity {
         voiceButton = findViewById(R.id.voiceButton);
 
         chatMessages = new ArrayList<>();
-        chatAdapter = new ChatAdapter(chatMessages);
+        chatAdapter = new ChatAdapter(chatMessages, this); // Pass listener to adapter
         chatRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         chatRecyclerView.setAdapter(chatAdapter);
 
@@ -136,6 +145,209 @@ public class MainActivity extends AppCompatActivity {
 
         // Check for audio recording permission
         checkAudioPermission();
+    }
+
+    // Interface implementation for long click listener
+    @Override
+    public void onMessageLongClick(ChatMessage message, View view) {
+        if (!message.isUser()) { // Only allow TTS for received messages
+            showPopupMenu(message, view);
+        } else {
+            Log.d("MainActivity", "Ignoring long click on user message");
+        }
+    }
+
+    private void showPopupMenu(ChatMessage message, View view) {
+        androidx.appcompat.widget.PopupMenu popup = new androidx.appcompat.widget.PopupMenu(this, view);
+        popup.getMenuInflater().inflate(R.menu.message_popup_menu, popup.getMenu());
+
+        popup.setOnMenuItemClickListener(item -> {
+            if (item.getItemId() == R.id.listen_to_message) {
+                convertTextToSpeech(message.getText());
+                return true;
+            }
+            return false;
+        });
+
+        popup.show();
+    }
+
+    private void convertTextToSpeech(String text) {
+        if (isPlaying) {
+            Toast.makeText(this, "Already playing audio", Toast.LENGTH_SHORT).show();
+            Log.d("MainActivity", "Already playing audio, returning");
+            return;
+        }
+
+        showLoading(true);
+        Toast.makeText(this, "Converting message to audio...", Toast.LENGTH_LONG).show();
+
+        new Thread(() -> {
+            try {
+
+                // Create JSON request for GCP Text-to-Speech API
+                JSONObject input = new JSONObject();
+                input.put("text", text);
+
+                JSONObject voice = new JSONObject();
+                voice.put("languageCode", "en-US");
+                voice.put("name", "en-US-Neural2-F"); // Female voice, you can change this
+                voice.put("ssmlGender", "FEMALE");
+
+                JSONObject audioConfig = new JSONObject();
+                audioConfig.put("audioEncoding", "LINEAR16");
+                audioConfig.put("sampleRateHertz", 22050);
+
+                JSONObject request = new JSONObject();
+                request.put("input", input);
+                request.put("voice", voice);
+                request.put("audioConfig", audioConfig);
+
+                // Make API call
+                OkHttpClient client = new OkHttpClient.Builder()
+                        .connectTimeout(30, TimeUnit.SECONDS)
+                        .readTimeout(30, TimeUnit.SECONDS)
+                        .writeTimeout(30, TimeUnit.SECONDS)
+                        .build();
+
+                RequestBody body = RequestBody.create(
+                        request.toString(),
+                        MediaType.parse("application/json; charset=utf-8")
+                );
+
+                Request apiRequest = new Request.Builder()
+                        .url(TEXT_TO_SPEECH_URL)
+                        .post(body)
+                        .build();
+
+                client.newCall(apiRequest).enqueue(new Callback() {
+                    @Override
+                    public void onFailure(Call call, IOException e) {
+                        Log.e("MainActivity", "TTS API call failed", e);
+                        runOnUiThread(() -> {
+                            showLoading(false);
+                            Toast.makeText(MainActivity.this,
+                                    "Text-to-speech failed: " + e.getMessage(),
+                                    Toast.LENGTH_LONG).show();
+                            Log.e("MainActivity", "TTS API failed", e);
+                        });
+                    }
+
+                    @Override
+                    public void onResponse(Call call, Response response) throws IOException {
+                        Log.d("MainActivity", "TTS API response received. Code: " + response.code());
+                        runOnUiThread(() -> showLoading(false));
+
+                        if (response.isSuccessful()) {
+                            try {
+                                String responseBody = response.body().string();
+                                Log.d("MainActivity", "TTS API response body length: " + responseBody.length());
+
+                                JSONObject jsonResponse = new JSONObject(responseBody);
+
+                                if (jsonResponse.has("audioContent")) {
+                                    String audioContent = jsonResponse.getString("audioContent");
+                                    Log.d("MainActivity", "Audio content received, length: " + audioContent.length());
+                                    byte[] audioData = Base64.decode(audioContent, Base64.DEFAULT);
+                                    Log.d("MainActivity", "Decoded audio data size: " + audioData.length + " bytes");
+
+                                    runOnUiThread(() -> {
+                                        Toast.makeText(MainActivity.this,
+                                                "Playing audio...", Toast.LENGTH_SHORT).show();
+                                        playAudio(audioData);
+                                    });
+                                } else {
+                                    Log.e("MainActivity", "No audioContent in response: " + responseBody);
+                                    runOnUiThread(() -> {
+                                        Toast.makeText(MainActivity.this,
+                                                "No audio content received", Toast.LENGTH_SHORT).show();
+                                    });
+                                }
+
+                            } catch (JSONException e) {
+                                Log.e("MainActivity", "TTS JSON parsing error", e);
+                                runOnUiThread(() -> {
+                                    Toast.makeText(MainActivity.this,
+                                            "Error parsing TTS response", Toast.LENGTH_SHORT).show();
+                                });
+                            }
+                        } else {
+                            String errorBody = "";
+                            try {
+                                errorBody = response.body().string();
+                            } catch (IOException e) {
+                                Log.e("MainActivity", "Error reading error response", e);
+                            }
+                            Log.e("MainActivity", "TTS API error: " + response.code() + " - " + errorBody);
+                            runOnUiThread(() -> {
+                                Toast.makeText(MainActivity.this,
+                                        "TTS API error: " + response.code(), Toast.LENGTH_LONG).show();
+                            });
+                        }
+                    }
+                });
+
+            } catch (Exception e) {
+                Log.e("MainActivity", "Error in convertTextToSpeech", e);
+                runOnUiThread(() -> {
+                    showLoading(false);
+                    Toast.makeText(MainActivity.this,
+                            "Error processing TTS: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                });
+            }
+        }).start();
+    }
+
+    private void playAudio(byte[] audioData) {
+        Log.d("MainActivity", "playAudio called with " + audioData.length + " bytes");
+
+        new Thread(() -> {
+            try {
+                isPlaying = true;
+                Log.d("MainActivity", "Starting audio playback...");
+
+                int sampleRate = 22050;
+                int minBufferSize = AudioTrack.getMinBufferSize(
+                        sampleRate,
+                        AudioFormat.CHANNEL_OUT_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT
+                );
+
+                Log.d("MainActivity", "Audio track buffer size: " + minBufferSize);
+
+                audioTrack = new AudioTrack(
+                        AudioManager.STREAM_MUSIC,
+                        sampleRate,
+                        AudioFormat.CHANNEL_OUT_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT,
+                        minBufferSize,
+                        AudioTrack.MODE_STREAM
+                );
+
+                Log.d("MainActivity", "AudioTrack created, starting playback");
+                audioTrack.play();
+
+                int bytesWritten = audioTrack.write(audioData, 0, audioData.length);
+                Log.d("MainActivity", "Bytes written to audio track: " + bytesWritten);
+
+                audioTrack.stop();
+                audioTrack.release();
+
+                isPlaying = false;
+                Log.d("MainActivity", "Audio playback completed");
+
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this, "Audio playback finished", Toast.LENGTH_SHORT).show();
+                });
+
+            } catch (Exception e) {
+                isPlaying = false;
+                Log.e("MainActivity", "Error playing audio", e);
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this, "Error playing audio: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                });
+            }
+        }).start();
     }
 
     private void checkAudioPermission() {
@@ -229,7 +441,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // Update UI
-        voiceButton.setImageResource(R.drawable.microphone); // You'll need a mic icon
+        voiceButton.setImageResource(R.drawable.microphone); // Your mic icon
         Toast.makeText(this, "Recording stopped. Processing...", Toast.LENGTH_SHORT).show();
 
         // Process the recorded audio
@@ -522,6 +734,9 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
         if (isRecording) {
             stopRecording();
+        }
+        if (audioTrack != null) {
+            audioTrack.release();
         }
     }
 }
