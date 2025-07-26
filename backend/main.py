@@ -17,7 +17,7 @@ load_dotenv()
 PROJECT_ID = os.getenv("PROJECT_ID", "steady-anagram-466916-t6")
 LOCATION = os.getenv("LOCATION", "us-central1")
 CREDENTIALS = service_account.Credentials.from_service_account_file(
-    "backend/config/service-account.json",
+    "/app/backend/config/service-account.json",
     scopes=["https://www.googleapis.com/auth/cloud-platform"]
 )
 

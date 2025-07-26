@@ -17,8 +17,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the entire project (including ai_pipeline)
-COPY backend/  .
-COPY ai_pipeline/ .
+COPY backend/  ./backend
+COPY ai_pipeline/ ./ai_pipeline
 
 # Create uploads directory if it doesn't exist
 RUN mkdir -p backend/uploads

@@ -5,7 +5,7 @@ from firebase_admin import credentials
 
 class FirebaseClient():
     def __init__(self):
-        cred = credentials.Certificate(os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+        cred = credentials.Certificate("/app/backend/config/service-account.json")
         # Check if Firebase is already initialized
         try:
             app = firebase_admin.get_app()
