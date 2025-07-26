@@ -63,9 +63,13 @@ dependencies {
     implementation("androidx.camera:camera-view:${cameraxVersion}")
     implementation("androidx.camera:camera-extensions:${cameraxVersion}") // Optional for extensions
 
+    // HTTP and JSON - These are what we need for Speech-to-Text API
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.google.code.gson:gson:2.10.1")
 
-    implementation ("com.google.code.gson:gson:2.10.1")
     implementation("commons-io:commons-io:2.11.0") // Or the latest version
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4")
 
+    // REMOVED: com.google.protobuf:protobuf-java:3.25.3 - Not needed for Android
+    // REMOVED: com.google.cloud:google-cloud-speech:4.21.1 - Server-side library, doesn't work on Android
 }
