@@ -3,6 +3,7 @@ import firebase_admin
 from firebase_admin import firestore
 from firebase_admin import credentials
 from dotenv import load_dotenv
+from google.oauth2 import service_account
 from datetime import timezone
 
 # Load environment variables from .env file
@@ -12,6 +13,7 @@ load_dotenv()
 USERS = "users"
 RECEIPTS = "receipts"
 PASSES = "passes"
+TIMESTAMP = "date_time"
 QUERIES = "queries"
 
 class FirebaseClient():
@@ -25,9 +27,16 @@ class FirebaseClient():
     def __init__(self):
         if not firebase_admin._apps:
             # Get credentials from environment variable
-            credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "backend/config/service-account.json")
-            cred = credentials.Certificate(credentials_path)
-            firebase_admin.initialize_app(cred)
+            credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "/Users/sagarreddy324/Desktop/cfp/wallet-agent/backend/config/service-account.json")
+            print(credentials_path)
+            
+            # Credentials for Firebase Admin SDK
+            self.cred = credentials.Certificate(credentials_path)
+            print(self.cred)
+            firebase_admin.initialize_app(self.cred)
+            
+            # Credentials for other Google Cloud SDKs (like Vertex AI)
+            self.google_cloud_creds = service_account.Credentials.from_service_account_file(credentials_path)
         
         self.db = firestore.client(database_id="walletagent")
 
@@ -107,15 +116,15 @@ class FirebaseClient():
         
         query = receipts_ref
         
-        if start_timestamp:
-            if isinstance(start_timestamp, str):
-                start_timestamp = datetime.fromisoformat(start_timestamp.replace('Z', '+00:00'))
-            query = query.where('timestamp', '>=', start_timestamp)
+        # if start_timestamp:
+        #     if isinstance(start_timestamp, str):
+        #         start_timestamp = datetime.fromisoformat(start_timestamp.replace('Z', '+00:00'))
+        #     query = query.where(TIMESTAMP, '>=', start_timestamp)
             
-        if end_timestamp:
-            if isinstance(end_timestamp, str):
-                end_timestamp = datetime.fromisoformat(end_timestamp.replace('Z', '+00:00'))
-            query = query.where('timestamp', '<=', end_timestamp)
+        # if end_timestamp:
+        #     if isinstance(end_timestamp, str):
+        #         end_timestamp = datetime.fromisoformat(end_timestamp.replace('Z', '+00:00'))
+        #     query = query.where(TIMESTAMP, '<=', end_timestamp)
         
         docs = query.stream()
         

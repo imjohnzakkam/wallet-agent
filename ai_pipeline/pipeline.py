@@ -9,10 +9,18 @@ from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, asdict
 from enum import Enum
 import vertexai
-from vertexai.generative_models import GenerativeModel, Part
+from vertexai.generative_models import (
+    Content,
+    FunctionDeclaration,
+    GenerationConfig,
+    GenerativeModel,
+    Part,
+    Tool,
+)
 from pathlib import Path
 
 from backend.firestudio.firebase import FirebaseClient
+from ai_pipeline import analysis_tools
 
 # Setup logging
 def setup_logging():
@@ -47,6 +55,7 @@ class PassType(Enum):
     SHOPPING_LIST = "shopping_list"
     ANALYTICS = "analytics"
     ALERT = "alert"
+    OTHER = "other"
 
 @dataclass
 class ReceiptItem:
@@ -118,8 +127,7 @@ class Receipt:
             tax=float(data.get('tax', 0)),
             payment_method=data.get('payment_method', ''),
             currency=data.get('currency', 'INR'),
-            language=data.get('language', 'en'),
-            raw_text=data.get('raw_text', '')
+            language=data.get('language', 'en')
         )
     
 @dataclass
@@ -137,10 +145,9 @@ class WalletPass:
 
 # 1. OCR Pipeline Component
 class ReceiptOCRPipeline:
-    def __init__(self, project_id: str, location: str):
+    def __init__(self, project_id: str, location: str, firebase_client: FirebaseClient):
         logger.info("Initializing ReceiptOCRPipeline with Vertex AI")
-        vertexai.init(project=project_id, location=location)
-        self.model = GenerativeModel('gemini-2.5-flash')
+        self.model = GenerativeModel('gemini-2.5-pro')
         logger.info("ReceiptOCRPipeline initialized successfully")
         
     def extract_receipt_data(self, media_content: bytes, media_type: str = "image") -> Receipt:
@@ -242,164 +249,125 @@ class ReceiptOCRPipeline:
 
 # 2. AI Chat Assistant Component
 class ReceiptChatAssistant:
-    def __init__(self, project_id: str, location: str, db_client: FirebaseClient):
-        logger.info("Initializing ReceiptChatAssistant with Vertex AI")
-        vertexai.init(project=project_id, location=location)
-        self.model = GenerativeModel('gemini-2.5-flash')
-        self.db = db_client
-        logger.info("ReceiptChatAssistant initialized successfully")
+    def __init__(self, project_id: str, location: str, firebase_client: FirebaseClient):
+        logger.info("Initializing ReceiptChatAssistant")
+        self.model = GenerativeModel('gemini-2.0-flash')
+        self.db_client = firebase_client
+        self.generation_config = GenerationConfig(temperature=0)
+
+        # --- Vertex AI Tool Calling Setup ---
         
-    def process_query(self, query: str, user_id: str) -> WalletPass:
-        """Process user query and generate appropriate wallet pass"""
+        self.function_declarations = [
+            FunctionDeclaration.from_func(analysis_tools.find_purchases),
+            FunctionDeclaration.from_func(analysis_tools.get_largest_purchase),
+            FunctionDeclaration.from_func(analysis_tools.get_spending_for_category),
+        ]
         
-        logger.info(f"Processing query for user {user_id}: {query}")
-        
-        intent, params = self._classify_query(query)
-        logger.debug(f"Query classified as: {intent} with params: {params}")
-        
-        handler_map = {
-            "spending_analysis": self._handle_spending_analysis,
-            "shopping_list": self._handle_shopping_list,
-            "show_receipt": self._handle_show_receipt,
+        self.tool = Tool(
+            function_declarations=self.function_declarations
+        )
+        # --- End of Tool Setup ---
+
+        self.toolbox = {
+            "find_purchases": analysis_tools.find_purchases,
+            "get_largest_purchase": analysis_tools.get_largest_purchase,
+            "get_spending_for_category": analysis_tools.get_spending_for_category,
         }
-        
-        handler = handler_map.get(intent, self._handle_complex_query)
-        result = handler(query, params, user_id)
-        
-        logger.info(f"Query processed successfully - Pass type: {result.pass_type.value}, Title: {result.title}")
-        return result
-    
-    def _classify_query(self, query: str) -> Tuple[str, Dict]:
-        """Classify query intent using Gemini"""
-        
-        prompt = f"""
-        Analyze the user's query to understand their intent and extract relevant parameters for querying a receipt database.
-        The current date is {datetime.now().strftime('%Y-%m-%d')}.
 
-        Available intents: "show_receipt", "spending_analysis", "shopping_list", "other".
-        Extract parameters: "start_date", "end_date", "category", "vendor_name", "amount_condition", "query_text".
-
-        User Query: "{query}"
-
-        Return your analysis as a JSON object: {{"intent": "...", "params": {{...}}}}
+    def process_query(self, query: str, user_id: str) -> WalletPass:
         """
-        
-        try:
-            response = self.model.generate_content(prompt)
-            data = json.loads(self._extract_json(response.text))
-            return data.get("intent", "other"), data.get("params", {})
-        except Exception as e:
-            logger.warning(f"Query classification failed: {e}")
-            return "other", {}
-    
-    def _fetch_receipts(self, user_id: str, params: Dict) -> List[Dict]:
-        """Fetch receipts from Firestore based on query parameters."""
-        if not self.db:
-            logger.warning("Firestore is not available. Cannot fetch receipts.")
-            return []
-
-        try:
-            start_date = params.get("start_date")
-            end_date = params.get("end_date")
-            
-            receipts = self.db.get_receipts_by_timerange(user_id, start_date, end_date)
-            
-            # Further filtering in Python
-            if params.get("category"):
-                receipts = [r for r in receipts if r.get('category') == params["category"]]
-            if params.get("vendor_name"):
-                receipts = [r for r in receipts if r.get('vendor_name') == params["vendor_name"]]
-            if params.get("amount_condition"):
-                cond = params["amount_condition"]
-                op = cond.get("operator")
-                val = float(cond.get("value", 0))
-                op_map = {"gt": lambda x: x > val, "lt": lambda x: x < val, "eq": lambda x: x == val}
-                if op in op_map:
-                    receipts = [r for r in receipts if op_map[op](r.get('amount', 0))]
-
-            logger.info(f"Fetched and filtered {len(receipts)} receipts for user {user_id} with params {params}")
-            return receipts
-
-        except Exception as e:
-            logger.error(f"Error fetching receipts from Firestore: {e}", exc_info=True)
-            return []
-
-    def _handle_spending_analysis(self, query: str, params: Dict, user_id: str) -> WalletPass:
-        """Handle spending analysis queries"""
-        receipts = self._fetch_receipts(user_id, params)
-        if not receipts:
-            return WalletPass(pass_type=PassType.ANALYTICS, title="Spending Analysis", subtitle="No receipts found.", details={"query": query})
-
-        total_spending = sum(r.get('amount', 0) for r in receipts)
-        by_category = {}
-        for r in receipts:
-            by_category[r.get('category', 'other')] = by_category.get(r.get('category', 'other'), 0) + r.get('amount', 0)
-
-        return WalletPass(
-            pass_type=PassType.ANALYTICS,
-            title="Spending Analysis",
-            subtitle=f"Analysis for: {query}",
-            details={
-                "total_spending": total_spending,
-                "receipt_count": len(receipts),
-                "by_category": by_category,
-            }
-        )
-    
-    def _handle_shopping_list(self, query: str, params: Dict, user_id: str) -> WalletPass:
-        """Generate shopping lists based on query"""
-        today = datetime.now().date()
-        last_month_end = today.replace(day=1) - timedelta(days=1)
-        last_month_start = last_month_end.replace(day=1)
-        
-        receipts = self._fetch_receipts(user_id, {
-            "start_date": last_month_start.strftime("%Y-%m-%d"),
-            "end_date": last_month_end.strftime("%Y-%m-%d"),
-        })
-        
-        recent_items_str = ", ".join(list(set(item['name'] for r in receipts for item in r.get('items', [])))[:20])
-
-        prompt = f"""
-        User query: "{query}".
-        Recent items: {recent_items_str}.
-        Generate a shopping list in JSON: {{"items": [{{"name": "...", "quantity": "...", "estimated_price": ...}}], "total_estimate": ...}}
+        Processes a user query using the Vertex AI tool-calling feature by manually
+        managing conversation history.
         """
+        logger.info(f"Handling query for user {user_id} with Vertex AI tools: '{query}'")
 
-        try:
-            response = self.model.generate_content(prompt)
-            list_data = json.loads(self._extract_json(response.text))
-        except Exception as e:
-            logger.error(f"Failed to generate shopping list with Gemini: {e}")
-            list_data = {"items": [], "total_estimate": 0}
+        # Manually manage conversation history
+        history = [
+            Content(role="user", parts=[Part.from_text(
+                f"You are a helpful financial assistant for the Wallet Agent app. "
+                f"Analyze the user's query and use the available tools to answer it. "
+                f"All currencies are in INR. "
+                f"Today's date is {datetime.now().strftime('%Y-%m-%d')}."
+            )]),
+            Content(role="model", parts=[Part.from_text("Okay, I am ready to help. What is your query?")]),
+            Content(role="user", parts=[Part.from_text(query)])
+        ]
+        
+        execution_results = []
+
+        # Loop to handle multi-turn tool calls
+        for _ in range(5): # Max 5 turns to prevent infinite loops
+            
+            response = self.model.generate_content(
+                history,
+                tools=[self.tool],
+                generation_config=self.generation_config
+            )
+
+            # After generating content, check for function calls
+            if not response.candidates or not response.candidates[0].content.parts or not response.candidates[0].content.parts[0].function_call:
+                # If no function call, we have the final text response
+                break
+
+            # Add the model's request to the history
+            history.append(response.candidates[0].content)
+            
+            # Prepare a list of tool responses
+            tool_responses = []
+
+            for part in response.candidates[0].content.parts:
+                if not part.function_call:
+                    continue
+
+                function_call = part.function_call
+                tool_name = function_call.name
+                tool_func = self.toolbox.get(tool_name)
+
+                if not tool_func:
+                    logger.error(f"Tool '{tool_name}' not found.")
+                    tool_responses.append(Part.from_function_response(
+                        name=tool_name,
+                        response={"error": f"Tool '{tool_name}' not found."}
+                    ))
+                    continue
+                
+                try:
+                    args = dict(function_call.args)
+                    # Inject dependencies
+                    if tool_name in ["find_purchases", "get_spending_for_category"]:
+                        args["db_client"] = self.db_client
+                        args["user_id"] = user_id
+                    
+                    result = tool_func(**args)
+                    
+                    log_args = {k: v for k, v in args.items() if k not in ['db_client', 'user_id']}
+                    execution_results.append({"tool": tool_name, "args": log_args, "result": result})
+                    logger.info(f"Executed tool '{tool_name}' with args {log_args}. Result: {result}")
+
+                    tool_responses.append(Part.from_function_response(
+                        name=tool_name,
+                        response={"content": json.dumps(result, default=str)}
+                    ))
+                except Exception as e:
+                    logger.error(f"Error executing tool '{tool_name}': {e}", exc_info=True)
+                    tool_responses.append(Part.from_function_response(
+                        name=tool_name,
+                        response={"error": str(e)}
+                    ))
+            
+            # Add the tool execution results to the history
+            history.append(Content(role="tool", parts=tool_responses))
+
+
+        final_response_text = response.text if response.candidates else "No response from model."
+        logger.info(f"Final synthesized response: {final_response_text}")
 
         return WalletPass(
-            pass_type=PassType.SHOPPING_LIST,
-            title="Your Shopping List",
-            subtitle=f"Generated from: '{query}'",
-            details=list_data,
-            valid_until=datetime.now() + timedelta(days=7)
+            pass_type=PassType.OTHER,
+            title="Your Agent's Answer",
+            subtitle=query,
+            details={"response": final_response_text, "execution_results": execution_results}
         )
-    
-    def _handle_show_receipt(self, query: str, params: Dict, user_id: str) -> WalletPass:
-        """Handle showing specific receipts"""
-        receipts = self._fetch_receipts(user_id, params)
-
-        if not receipts:
-            return WalletPass(pass_type=PassType.RECEIPT, title="Receipt Search", subtitle="No results.", details={"query": query})
-
-        return WalletPass(
-            pass_type=PassType.RECEIPT,
-            title="Receipt Search",
-            subtitle=f"Found {len(receipts)} receipts",
-            details={
-                "receipt_summaries": [{k: r[k] for k in ('receipt_id', 'vendor_name', 'amount', 'date_time')} for r in receipts],
-                "total_amount": sum(r.get('amount', 0) for r in receipts),
-            }
-        )
-    
-    def _handle_complex_query(self, query: str, params: Dict, user_id: str) -> WalletPass:
-        """Handle complex queries using full context"""
-        return WalletPass(pass_type=PassType.ANALYTICS, title="Query Results", subtitle="Analysis complete", details={"query": query})
     
     def _extract_json(self, text: str) -> str:
         """Extract JSON from text"""
@@ -411,8 +379,6 @@ class ReceiptAnalysisPipeline:
     def __init__(self, db_client: FirebaseClient, project_id: str = None, location: str = None):
         logger.info("Initializing ReceiptAnalysisPipeline")
         self.db = db_client
-        if project_id and location:
-            vertexai.init(project=project_id, location=location)
         logger.info("ReceiptAnalysisPipeline initialized successfully")
         
     def generate_periodic_insights(self, user_id: str) -> List[WalletPass]:
@@ -430,8 +396,11 @@ class AIPipeline:
     def __init__(self, project_id: str, location: str, firebase_client: FirebaseClient):
         logger.info("Initializing AIPipeline")
         
+        # Centralized Vertex AI initialization with the correct credentials
+        vertexai.init(project=project_id, location=location, credentials=firebase_client.google_cloud_creds)
+        
         self.db = firebase_client
-        self.ocr = ReceiptOCRPipeline(project_id, location)
+        self.ocr = ReceiptOCRPipeline(project_id, location, firebase_client)
         self.chat = ReceiptChatAssistant(project_id, location, self.db)
         self.analytics = ReceiptAnalysisPipeline(self.db, project_id, location)
         

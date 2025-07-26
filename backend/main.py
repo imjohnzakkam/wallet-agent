@@ -22,11 +22,11 @@ LOCATION = os.getenv("LOCATION", "us-central1")
 app = FastAPI()
 
 # Initialize AI Pipeline and Firebase Client
-try:
-    firebase_client = FirebaseClient()
-    pipeline = AIPipeline(project_id=PROJECT_ID, location=LOCATION, firebase_client=firebase_client)
-except Exception as e:
-    raise RuntimeError(f"Failed to initialize AI Pipeline or Firebase Client: {e}")
+# try:
+firebase_client = FirebaseClient()
+pipeline = AIPipeline(project_id=PROJECT_ID, location=LOCATION, firebase_client=firebase_client)
+# except Exception as e:
+#     raise RuntimeError(f"Failed to initialize AI Pipeline or Firebase Client: {e}")
 
 # Pydantic models for request bodies
 class QueryRequest(BaseModel):
@@ -49,16 +49,20 @@ class AddToWalletRequest(BaseModel):
 async def query_endpoint(request: QueryRequest):
     try:
         result = pipeline.handle_query(query=request.query, user_id=request.user_id)
+
+        response = result['wallet_pass']['details']['response']
+        response = response if response else str(result)
+
         
         # Store the query and its response in Firestore
         firebase_client.add_user_query(
             user_id=request.user_id,
             query=request.query,
-            llm_response=str(result)  # Assuming result is the string response
+            llm_response= response  # Assuming result is the string response
         )
         
         return {
-            "llm_response" : str(result)
+            "llm_response" : response
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

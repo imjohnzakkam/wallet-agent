@@ -11,3 +11,6 @@ cfp/
 backups/
 
 .DS_Store
+
+ai_pipeline/complex_query_test.py
+complex_query.log
