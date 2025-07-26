@@ -30,6 +30,15 @@ class QueryRequest(BaseModel):
 class InsightsRequest(BaseModel):
     user_id: str
 
+class AddToWalletRequest(BaseModel):
+    user_id: str
+    receipt_id: str
+    vendor: str
+    category: str
+    amount: str
+    date: str
+    time: str
+
 @app.post("/query")
 async def query_endpoint(request: QueryRequest):
     try:
@@ -51,21 +60,25 @@ async def upload_image(file: UploadFile = File(...), user_id: str = Form(...)):
     try:
         image_bytes = await file.read()
         result = pipeline.process_receipt(media_content=image_bytes, media_type="image", user_id=user_id)
-        receipt_data = result.get("receipt_data", {})
-        # Extract fields for wallet
-        vendor = receipt_data.get("vendor_name", "Unknown Vendor")
-        category = receipt_data.get("category", "Other")
-        amount = f"{receipt_data.get('amount', 0)} {receipt_data.get('currency', 'INR')}"
-        date_time = str(receipt_data.get("date_time", ""))
-        # Split date and time if possible
-        if " " in date_time:
-            date, time = date_time.split(" ", 1)
-        else:
-            date, time = date_time, ""
-        wallet_link = create_wallet_receipt(vendor, category, amount, date, time)
-        return {"ocr_result": result, "wallet_link": wallet_link}
+        # Only return OCR result, do not create wallet receipt here
+        return {"ocr_result": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to process image and create wallet pass: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process image: {str(e)}")
+
+@app.post("/add-to-wallet")
+async def add_to_wallet(request: AddToWalletRequest):
+    try:
+        wallet_link = create_wallet_receipt(
+            request.vendor,
+            request.category,
+            request.amount,
+            request.date,
+            request.time
+        )
+        return {"wallet_link": wallet_link}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create wallet pass: {str(e)}")
+   
 
 @app.get("/")
 def read_root():
