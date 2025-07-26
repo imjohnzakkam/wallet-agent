@@ -87,9 +87,9 @@ class WalletPass:
 
 # 1. OCR Pipeline Component
 class ReceiptOCRPipeline:
-    def __init__(self, project_id: str, location: str):
+    def __init__(self, project_id: str, location: str, credentials):
         logger.info("Initializing ReceiptOCRPipeline with Vertex AI")
-        vertexai.init(project=project_id, location=location)
+        vertexai.init(project=project_id, location=location, credentials=credentials)
         self.model = GenerativeModel('gemini-2.5-pro')
         logger.info("ReceiptOCRPipeline initialized successfully")
         
@@ -384,7 +384,7 @@ class ReceiptAnalysisPipeline:
 
 # Main Integration Class
 class AIPipeline:
-    def __init__(self, project_id: str, location: str, firestore_credentials=None):
+    def __init__(self, project_id: str, location: str, firestore_credentials=None, credentials=None):
         logger.info("Initializing AIPipeline")
         
         # Initialize Firestore (optional)
@@ -399,7 +399,7 @@ class AIPipeline:
             logger.info("Running without Firestore database")
         
         # Initialize components
-        self.ocr = ReceiptOCRPipeline(project_id, location)
+        self.ocr = ReceiptOCRPipeline(project_id, location, credentials)
         self.chat = ReceiptChatAssistant(project_id, location, self.db)
         self.analytics = ReceiptAnalysisPipeline(self.db, project_id, location)
         

@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from google.oauth2 import service_account
 from pydantic import BaseModel
 import os
 from dotenv import load_dotenv
@@ -15,6 +16,10 @@ load_dotenv()
 # Get project configuration
 PROJECT_ID = os.getenv("PROJECT_ID", "steady-anagram-466916-t6")
 LOCATION = os.getenv("LOCATION", "us-central1")
+CREDENTIALS = service_account.Credentials.from_service_account_file(
+    "backend/config/service-account.json",
+    scopes=["https://www.googleapis.com/auth/cloud-platform"]
+)
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -23,7 +28,7 @@ app = FastAPI()
 if not PROJECT_ID or not LOCATION:
     raise RuntimeError("PROJECT_ID and LOCATION must be set in .env file")
 
-pipeline = AIPipeline(project_id=PROJECT_ID, location=LOCATION)
+pipeline = AIPipeline(project_id=PROJECT_ID, location=LOCATION, credentials=CREDENTIALS)
 
 # Pydantic models for request bodies
 class QueryRequest(BaseModel):
