@@ -10,9 +10,10 @@ from dataclasses import dataclass, asdict
 from enum import Enum
 import vertexai
 from vertexai.generative_models import GenerativeModel, Part
-from google.cloud import firestore
 import base64
 from pathlib import Path
+
+from backend.firestudio.firebase import FirebaseClient
 
 # Setup logging
 def setup_logging():
@@ -307,7 +308,8 @@ class ReceiptChatAssistant:
             return []
 
         try:
-            query_ref = self.db.collection('receipts').where('user_id', '==', user_id)
+            # Changed to query user's subcollection of receipts
+            query_ref = self.db.collection('users').document(user_id).collection('receipts')
 
             # Time range filter
             if params.get("start_date"):
@@ -553,24 +555,21 @@ class ReceiptAnalysisPipeline:
 
 # Main Integration Class
 class AIPipeline:
-    def __init__(self, project_id: str, location: str, firestore_credentials=None, credentials=None):
+    def __init__(self, project_id: str, location: str, credentials=None, firebase_client: "FirebaseClient" = None):
         logger.info("Initializing AIPipeline")
         
-        # Initialize Firestore (optional)
-        self.db = None
-        if firestore_credentials:
-            try:
-                self.db = firestore.Client.from_service_account_json(firestore_credentials)
-                logger.info("Firestore initialized successfully")
-            except Exception as e:
-                logger.warning(f"Could not initialize Firestore: {e}, running without database")
+        # Initialize Firestore
+        if firebase_client:
+            self.db = firebase_client
+            logger.info("Using provided FirebaseClient")
         else:
-            logger.info("Running without Firestore database")
+            self.db = FirebaseClient()
+            logger.info("Initialized new FirebaseClient")
         
         # Initialize components
         self.ocr = ReceiptOCRPipeline(project_id, location, credentials)
-        self.chat = ReceiptChatAssistant(project_id, location, self.db)
-        self.analytics = ReceiptAnalysisPipeline(self.db, project_id, location)
+        self.chat = ReceiptChatAssistant(project_id, location, self.db.db)
+        self.analytics = ReceiptAnalysisPipeline(self.db.db, project_id, location)
         
         logger.info("AIPipeline initialized successfully")
     
@@ -599,8 +598,7 @@ class AIPipeline:
         }
         if self.db:
             try:
-                doc_ref = self.db.collection('receipts').add(receipt_data_to_store)
-                receipt_id = doc_ref[1].id
+                receipt_id = self.db.add_update_recipt_details(user_id=user_id, recipt_doc=receipt_data_to_store)
                 logger.info(f"Receipt stored in Firestore with ID: {receipt_id}")
             except Exception as e:
                 logger.error(f"Failed to store receipt in Firestore: {e}")
@@ -641,8 +639,7 @@ class AIPipeline:
                 pass_dict = asdict(pass_data)
                 pass_dict['user_id'] = user_id
                 pass_dict['pass_type'] = pass_data.pass_type.value
-                doc_ref = self.db.collection('passes').add(pass_dict)
-                pass_id = doc_ref[1].id
+                pass_id = self.db.add_update_pass_details(user_id=user_id, pass_doc=pass_dict)
                 logger.info(f"Query pass stored in Firestore with ID: {pass_id}")
             except Exception as e:
                 logger.error(f"Failed to store query pass in Firestore: {e}")
@@ -670,8 +667,7 @@ class AIPipeline:
             pass_id = "mock_insight_id"
             if self.db:
                 try:
-                    doc_ref = self.db.collection('passes').add(pass_dict)
-                    pass_id = doc_ref[1].id
+                    pass_id = self.db.add_update_pass_details(user_id=user_id, pass_doc=pass_dict)
                 except Exception as e:
                     logger.error(f"Failed to store insight pass in Firestore: {e}")
             

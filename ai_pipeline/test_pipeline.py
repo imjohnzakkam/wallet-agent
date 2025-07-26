@@ -201,7 +201,7 @@ def test_chat_assistant_with_db(pipeline, user_id: str, logger):
             'items': [{'name': 'Test Item', 'quantity': 1, 'unit': 'pcs', 'price': 140.0}],
             'created_at': datetime.now()
         }
-        pipeline.db.collection('receipts').add(dummy_receipt_data)
+        pipeline.db.add_update_recipt_details(user_id=user_id, recipt_doc=dummy_receipt_data)
         logger.info("Dummy receipt added successfully.")
     except Exception as e:
         logger.error(f"Failed to add dummy receipt: {e}")
@@ -404,12 +404,21 @@ def main():
     from ai_pipeline.pipeline import AIPipeline
     
     try:
-        pipeline = AIPipeline(
-            project_id=project_id, 
-            location="us-central1", 
-            firestore_credentials=firestore_creds_path, 
-            credentials=credentials
-        )
+        if use_db:
+            from backend.firestudio.firebase import FirebaseClient
+            firebase_client = FirebaseClient()
+            pipeline = AIPipeline(
+                project_id=project_id,
+                location="us-central1",
+                credentials=credentials,
+                firebase_client=firebase_client
+            )
+        else:
+            pipeline = AIPipeline(
+                project_id=project_id,
+                location="us-central1",
+                credentials=credentials
+            )
         logger.info("Pipeline initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize AI Pipeline: {e}", exc_info=True)
