@@ -177,6 +177,7 @@ def test_chat_assistant_with_db(pipeline, user_id: str, logger):
     print(f"{'='*50}")
 
     test_queries = [
+        # "What is the weather in Mumbai?",
         "How much did I spend on groceries in the last 30 days?",
         "Show me all my receipts from 'Test Vendor'",
         "Create a shopping list for pasta.",
@@ -384,9 +385,15 @@ def main():
     if firestore_creds_path:
         if os.path.exists(firestore_creds_path):
             from google.oauth2 import service_account
-            credentials = service_account.Credentials.from_service_account_file(firestore_creds_path)
+            credentials = service_account.Credentials.from_service_account_file(
+                firestore_creds_path,
+                scopes=[
+                    'https://www.googleapis.com/auth/cloud-platform',
+                    'https://www.googleapis.com/auth/generative-language'
+                ]
+            )
             use_db = True
-            logger.info("Using service account credentials for Firestore and Vertex AI.")
+            logger.info("Using service account credentials with proper scopes.")
         else:
             logger.warning(f"Firestore credentials file not found at {firestore_creds_path}. DB tests will be skipped.")
             firestore_creds_path = None # Ensure it's None if not found

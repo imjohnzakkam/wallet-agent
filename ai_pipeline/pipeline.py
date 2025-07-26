@@ -21,6 +21,7 @@ from pathlib import Path
 
 from backend.firestudio.firebase import FirebaseClient
 from ai_pipeline import analysis_tools
+from ai_pipeline.search_tools import WebSearchTool
 
 # Setup logging
 def setup_logging():
@@ -145,7 +146,7 @@ class WalletPass:
 
 # 1. OCR Pipeline Component
 class ReceiptOCRPipeline:
-    def __init__(self, project_id: str, location: str, firebase_client: FirebaseClient):
+    def __init__(self, project_id: str, location: str, firebase_client: FirebaseClient, web_search_tool: WebSearchTool = None):
         logger.info("Initializing ReceiptOCRPipeline with Vertex AI")
         self.model = GenerativeModel('gemini-2.5-pro')
         logger.info("ReceiptOCRPipeline initialized successfully")
@@ -249,11 +250,12 @@ class ReceiptOCRPipeline:
 
 # 2. AI Chat Assistant Component
 class ReceiptChatAssistant:
-    def __init__(self, project_id: str, location: str, firebase_client: FirebaseClient):
+    def __init__(self, project_id: str, location: str, firebase_client: FirebaseClient, web_search_tool: WebSearchTool = None):
         logger.info("Initializing ReceiptChatAssistant")
         self.model = GenerativeModel('gemini-2.0-flash')
         self.db_client = firebase_client
         self.generation_config = GenerationConfig(temperature=0)
+        self.web_search_tool = web_search_tool
 
         # --- Vertex AI Tool Calling Setup ---
         
@@ -261,6 +263,7 @@ class ReceiptChatAssistant:
             FunctionDeclaration.from_func(analysis_tools.find_purchases),
             FunctionDeclaration.from_func(analysis_tools.get_largest_purchase),
             FunctionDeclaration.from_func(analysis_tools.get_spending_for_category),
+            FunctionDeclaration.from_func(self.web_search_tool.search),
         ]
         
         self.tool = Tool(
@@ -398,10 +401,20 @@ class AIPipeline:
         
         # Centralized Vertex AI initialization with the correct credentials
         vertexai.init(project=project_id, location=location, credentials=firebase_client.google_cloud_creds)
-        
+        scoped_credentials = firebase_client.google_cloud_creds
+        if credentials:
+            # Re-scope credentials to ensure they have cloud-platform access.
+            # This is necessary for services like Vertex AI.
+            try:
+                scoped_credentials = credentials.with_scopes([
+                    "https://www.googleapis.com/auth/cloud-platform"
+                ])
+            except AttributeError:
+                logger.warning("Credentials object does not support re-scoping. Proceeding with original credentials.")
         self.db = firebase_client
         self.ocr = ReceiptOCRPipeline(project_id, location, firebase_client)
-        self.chat = ReceiptChatAssistant(project_id, location, self.db)
+        self.web_search = WebSearchTool(project_id, location, scoped_credentials)
+        self.chat = ReceiptChatAssistant(project_id, location, self.db, self.web_search)
         self.analytics = ReceiptAnalysisPipeline(self.db, project_id, location)
         
         logger.info("AIPipeline initialized successfully")
