@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, asdict
 from enum import Enum
+from google.auth import credentials
 import vertexai
 from vertexai.generative_models import (
     Content,
@@ -387,6 +388,10 @@ class ReceiptAnalysisPipeline:
     def __init__(self, db_client: FirebaseClient, project_id: str = None, location: str = None):
         logger.info("Initializing ReceiptAnalysisPipeline")
         self.db = db_client
+        self.storage_client = storage.Client(
+            project=project_id,
+            credentials=db_client.google_cloud_creds
+        )
         logger.info("ReceiptAnalysisPipeline initialized successfully")
         
     def generate_periodic_insights(self, user_id: str) -> List[dict[str,Any]]:
