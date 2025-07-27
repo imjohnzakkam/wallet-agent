@@ -1,5 +1,6 @@
 package com.example.raseed;
 
+import android.content.Context;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -11,19 +12,26 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import java.util.List;
 
+import io.noties.markwon.Markwon;
+import io.noties.markwon.linkify.LinkifyPlugin;
+
 public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ChatViewHolder> {
 
     private List<ChatMessage> chatMessages;
     private OnMessageLongClickListener longClickListener;
+    private Markwon markwon;
 
     // Interface for long click handling
     public interface OnMessageLongClickListener {
         void onMessageLongClick(ChatMessage message, View view);
     }
 
-    public ChatAdapter(List<ChatMessage> chatMessages, OnMessageLongClickListener longClickListener) {
+    public ChatAdapter(List<ChatMessage> chatMessages, OnMessageLongClickListener longClickListener, Context context) {
         this.chatMessages = chatMessages;
         this.longClickListener = longClickListener;
+        this.markwon = Markwon.builder(context)
+                .usePlugin(LinkifyPlugin.create())
+                .build();
     }
 
     // Overloaded constructor for backward compatibility
@@ -43,6 +51,15 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ChatViewHolder
     @Override
     public void onBindViewHolder(@NonNull ChatViewHolder holder, int position) {
         ChatMessage message = chatMessages.get(position);
+
+        if (message.isMarkdown()) {
+            // Render markdown
+            markwon.setMarkdown(holder.messageText, message.getText());
+        } else {
+            // Set plain text
+            holder.messageText.setText(message.getText());
+        }
+
         holder.bind(message);
     }
 

@@ -39,9 +39,14 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -100,7 +105,7 @@ public class MainActivity extends AppCompatActivity implements ChatAdapter.OnMes
         voiceButton = findViewById(R.id.voiceButton);
 
         chatMessages = new ArrayList<>();
-        chatAdapter = new ChatAdapter(chatMessages, this); // Pass listener to adapter
+        chatAdapter = new ChatAdapter(chatMessages, this, this); // Pass listener to adapter
         chatRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         chatRecyclerView.setAdapter(chatAdapter);
 
@@ -707,21 +712,35 @@ public class MainActivity extends AppCompatActivity implements ChatAdapter.OnMes
     private void sendToBackend(String message) {
         new Thread(() -> {
             try {
-                Thread.sleep(1000);
+                URL url = new URL("https://wallet-agent-203063692416.asia-south1.run.app/query");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setDoOutput(true);
 
-                String llmResponse;
-                String walletLink;
+                JSONObject json = new JSONObject();
+                json.put("query", message);
+                json.put("user_id", "123");
 
-                if (message.toLowerCase().contains("receipt")) {
-                    llmResponse = "Here are your recent grocery receipts from Big Bazaar and Reliance Fresh.";
-                    walletLink = "https://pay.google.com/gp/v/save/receipt-pass-id";
-                } else {
-                    llmResponse = "You spent ₹2,340 on groceries last week, mainly at Big Bazaar and FreshMart.";
-                    walletLink = "";
+                OutputStream os = conn.getOutputStream();
+                os.write(json.toString().getBytes("UTF-8"));
+                os.flush();
+                os.close();
+
+                BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                StringBuilder response = new StringBuilder();
+                String line;
+                while ((line = in.readLine()) != null) {
+                    response.append(line);
                 }
+                in.close();
+
+                JSONObject responseJson = new JSONObject(response.toString());
+                String llmResponse = responseJson.getString("llm_response");
+                String walletLink = responseJson.optString("wallet_link", "");
 
                 runOnUiThread(() -> {
-                    chatMessages.add(new ChatMessage(llmResponse, false, walletLink));
+                    chatMessages.add(new ChatMessage(llmResponse, false, walletLink, true));
                     chatAdapter.notifyItemInserted(chatMessages.size() - 1);
                     chatRecyclerView.smoothScrollToPosition(chatMessages.size() - 1);
                 });
