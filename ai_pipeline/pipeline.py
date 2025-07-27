@@ -256,31 +256,90 @@ class ReceiptOCRPipeline:
 class ReceiptChatAssistant:
     def __init__(self, project_id: str, location: str, firebase_client: FirebaseClient, web_search_tool: WebSearchTool = None):
         logger.info("Initializing ReceiptChatAssistant")
-        self.model = GenerativeModel('gemini-2.0-flash')
         self.db_client = firebase_client
         self.generation_config = GenerationConfig(temperature=0)
+
+        # Create system instruction
+        system_instruction = f"""You are a helpful financial assistant for the Wallet Agent app called Raseed.
+You help users analyze their spending patterns, track expenses, and make better financial decisions.
+
+## Data Structures You Work With:
+
+### Receipt Categories:
+The receipts are categorized into the following types:
+- GROCERY: "grocery" - Supermarkets, food stores, vegetable vendors
+- RESTAURANT: "restaurant" - Dining out, food delivery, cafes
+- SHOPPING: "shopping" - Clothing, accessories, general retail
+- FUEL: "fuel" - Petrol, diesel, gas stations
+- PHARMACY: "pharmacy" - Medical stores, drug stores
+- ELECTRONICS: "electronics" - Electronic goods, gadgets, appliances
+- UTILITIES: "utilities" - Subscriptions, bills, recurring services
+- OTHER: "other" - Anything that doesn't fit above categories
+
+### Receipt Structure:
+Each receipt contains:
+- vendor_name: Name of the store/restaurant
+- category: One of the categories above
+- date_time: When the purchase was made
+- amount: Total amount paid
+- items: List of purchased items (each with name, quantity, unit, price, category)
+- subtotal: Amount before tax
+- tax: Tax amount
+- payment_method: How the payment was made (cash/card/upi/other)
+- currency: Currency code (default: INR)
+- language: Language of the receipt
+
+### Pass Types:
+Your responses can be categorized as:
+- RECEIPT: "receipt" - For receipt-related information
+- SHOPPING_LIST: "shopping_list" - For shopping lists and purchase planning
+- ANALYTICS: "analytics" - For spending analysis and insights
+- ALERT: "alert" - For warnings and notifications
+- OTHER: "other" - General responses
+
+## Key Instructions:
+- All currencies are in INR (Indian Rupees)
+- Today's date is {datetime.now().strftime('%Y-%m-%d')}
+- Use the available tools to answer user queries accurately
+- For any date range queries, use the _fetch_receipts_all_categories tool to get comprehensive data
+- Be concise but informative in your responses
+- Always provide specific numbers and data when available
+- When analyzing spending, consider the receipt categories to provide category-wise insights
+- Understand that items within receipts also have categories (like "dairy", "vegetables", "meat" for grocery items)
+- If you need to calculate or analyze spending patterns, use the appropriate analysis tools
+- Never ask follow-up questions; instead, make reasonable assumptions and provide a complete answer
+- Focus on being helpful and actionable in your responses
+
+## Understanding Receipt Data:
+- Grocery receipts often contain items with sub-categories like dairy, vegetables, fruits, grains, household items
+- Restaurant receipts may include food, beverages, and service charges
+- Utility receipts typically represent recurring subscriptions (Netflix, Amazon Prime, etc.)
+- Use this understanding to provide more detailed insights when analyzing spending
+
+Remember: You have access to the user's complete receipt history and various analysis tools. Use them effectively to provide accurate, data-driven insights based on the structured data format described above."""
+
+        # Initialize model with system instruction
+        self.model = GenerativeModel(
+            'gemini-2.0-flash',
+            system_instruction=system_instruction
+        )
         self.web_search_tool = web_search_tool
 
         # --- Vertex AI Tool Calling Setup ---
         
         self.function_declarations = [
-            FunctionDeclaration.from_func(analysis_tools.find_purchases),
-            FunctionDeclaration.from_func(analysis_tools.get_largest_purchase),
-            FunctionDeclaration.from_func(analysis_tools.get_spending_for_category),
-            FunctionDeclaration.from_func(self.web_search_tool.search),
+            FunctionDeclaration.from_func(tool) for tool in analysis_tools.all_tool_calls.values()
         ]
+        self.function_declarations.append(FunctionDeclaration.from_func(self.web_search_tool.search))
         
         self.tool = Tool(
             function_declarations=self.function_declarations
         )
         # --- End of Tool Setup ---
 
-        self.toolbox = {
-            "find_purchases": analysis_tools.find_purchases,
-            "get_largest_purchase": analysis_tools.get_largest_purchase,
-            "get_spending_for_category": analysis_tools.get_spending_for_category,
-            "search": self.web_search_tool.search,
-        }
+        self.toolbox = analysis_tools.all_tool_calls
+        self.toolbox['search'] = self.web_search_tool.search
+        logger.info("ReceiptChatAssistant initialized with system prompt")
 
     def process_query(self, query: str, user_id: str) -> WalletPass:
         """
@@ -289,17 +348,9 @@ class ReceiptChatAssistant:
         """
         logger.info(f"Handling query for user {user_id} with Vertex AI tools: '{query}'")
 
-        # Manually manage conversation history
+        # Manually manage conversation history - now without the system message
         history = [
-            Content(role="user", parts=[Part.from_text(
-                f"You are a helpful financial assistant for the Wallet Agent app. "
-                f"Analyze the user's query and use the available tools to answer it. "
-                f"You have access to 2 types of tools: 1. Tools that analyse data available in the database (analytics tools), 2. Tools that fetch data available on the web. (search tool) "
-                f"All currencies are in INR. "
-                f"Today's date is {datetime.now().strftime('%Y-%m-%d')}."
-            )]),
-            Content(role="model", parts=[Part.from_text("Okay, I am ready to help. What is your query?")]),
-            Content(role="user", parts=[Part.from_text(query)])
+            Content(role="user", parts=[Part.from_text(f"User ID: {user_id}\n\nQuery: {query}")])
         ]
         
         execution_results = []
@@ -342,14 +393,12 @@ class ReceiptChatAssistant:
                 
                 try:
                     args = dict(function_call.args)
-                    # Inject dependencies
-                    if tool_name in ["find_purchases", "get_spending_for_category"]:
-                        args["db_client"] = self.db_client
-                        args["user_id"] = user_id
+                    # Inject user_id dependency
+                    args["user_id"] = user_id
                     
                     result = tool_func(**args)
                     
-                    log_args = {k: v for k, v in args.items() if k not in ['db_client', 'user_id']}
+                    log_args = {k: v for k, v in args.items() if k not in ['user_id']}
                     execution_results.append({"tool": tool_name, "args": log_args, "result": result})
                     logger.info(f"Executed tool '{tool_name}' with args {log_args}. Result: {result}")
 
@@ -371,12 +420,61 @@ class ReceiptChatAssistant:
         final_response_text = response.text if response.candidates else "No response from model."
         logger.info(f"Final synthesized response: {final_response_text}")
 
+        # Determine appropriate pass type based on query and execution
+        pass_type = self._determine_pass_type(query, execution_results)
+        
+        # Generate appropriate title based on pass type
+        title = self._generate_title(pass_type, query, execution_results)
+
         return WalletPass(
-            pass_type=PassType.OTHER,
-            title="Your Agent's Answer",
+            pass_type=pass_type,
+            title=title,
             subtitle=query,
             details={"response": final_response_text, "execution_results": execution_results}
         )
+    
+    def _determine_pass_type(self, query: str, execution_results: List[Dict]) -> PassType:
+        """Determine the appropriate pass type based on query and results"""
+        query_lower = query.lower()
+        
+        # Check for shopping list queries
+        if any(keyword in query_lower for keyword in ['shopping list', 'need to buy', 'grocery list', 'items to purchase']):
+            return PassType.SHOPPING_LIST
+        
+        # Check for analytics queries
+        if any(keyword in query_lower for keyword in ['analysis', 'analyze', 'spending pattern', 'trend', 'breakdown', 'summary', 'insights']):
+            return PassType.ANALYTICS
+        
+        # Check for alerts
+        if any(keyword in query_lower for keyword in ['alert', 'warning', 'unusual', 'overspending', 'budget exceeded']):
+            return PassType.ALERT
+        
+        # Check execution results for more context
+        if execution_results:
+            tool_names = [result['tool'] for result in execution_results]
+            
+            if 'suggest_shopping_list' in tool_names or 'create_shopping_list_pass' in tool_names:
+                return PassType.SHOPPING_LIST
+            
+            if any('analysis' in tool or 'insight' in tool or 'trend' in tool for tool in tool_names):
+                return PassType.ANALYTICS
+            
+            if any('alert' in tool or 'unusual' in tool for tool in tool_names):
+                return PassType.ALERT
+        
+        # Default to OTHER
+        return PassType.OTHER
+    
+    def _generate_title(self, pass_type: PassType, query: str, execution_results: List[Dict]) -> str:
+        """Generate an appropriate title based on pass type"""
+        if pass_type == PassType.SHOPPING_LIST:
+            return "Shopping List"
+        elif pass_type == PassType.ANALYTICS:
+            return "Spending Analysis"
+        elif pass_type == PassType.ALERT:
+            return "Financial Alert"
+        else:
+            return "Raseed's Response"
     
     def _extract_json(self, text: str) -> str:
         """Extract JSON from text"""
