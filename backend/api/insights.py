@@ -116,7 +116,7 @@ def create_insights_pass(insights_data: dict):
          "subheader": {
             "defaultValue": {
                 "language": "en-US",
-                "value": f"{insights_data.get('month',"")} Insights"
+                "value": f"{insights_data.get('month','')} Insights"
             }
         },
         "header": {
