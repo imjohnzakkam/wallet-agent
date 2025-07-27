@@ -24,12 +24,20 @@ GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "wallet-agent")
 # Initialize FastAPI app
 app = FastAPI()
 
+# Health check endpoint
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
 # Initialize AI Pipeline and Firebase Client
-# try:
-firebase_client = FirebaseClient()
-pipeline = AIPipeline(project_id=PROJECT_ID, location=LOCATION, firebase_client=firebase_client)
-# except Exception as e:
-#     raise RuntimeError(f"Failed to initialize AI Pipeline or Firebase Client: {e}")
+try:
+    firebase_client = FirebaseClient()
+    pipeline = AIPipeline(project_id=PROJECT_ID, location=LOCATION, firebase_client=firebase_client)
+    logger.info("Successfully initialized AI Pipeline and Firebase Client.")
+except Exception as e:
+    logger.error(f"Failed to initialize AI Pipeline or Firebase Client: {e}", exc_info=True)
+    raise RuntimeError(f"Failed to initialize AI Pipeline or Firebase Client: {e}")
+
 
 # Pydantic models for request bodies
 class QueryRequest(BaseModel):
