@@ -27,7 +27,7 @@ class FirebaseClient():
     def __init__(self):
         if not firebase_admin._apps:
             # Get credentials from environment variable
-            credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "/app/backend/config/service-account.json")
+            credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "/backend/config/service-account.json")
             print(credentials_path)
             
             # Credentials for Firebase Admin SDK
