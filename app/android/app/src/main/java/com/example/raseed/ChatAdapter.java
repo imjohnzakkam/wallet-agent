@@ -1,6 +1,9 @@
 package com.example.raseed;
 
 import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -8,6 +11,8 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
+
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import java.util.List;
@@ -83,15 +88,29 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ChatViewHolder
         public void bind(ChatMessage message) {
             messageText.setText(message.getText());
 
-            // Set up wallet button visibility and functionality
-            if (!message.isUser() && !message.getWalletLink().isEmpty()) {
+            // Set up wallet button visibility and functionality for non-user messages with a valid wallet link
+            if (!message.isUser() && message.getWalletLink() != null && !message.getWalletLink().isEmpty()) {
                 addToWalletButton.setVisibility(View.VISIBLE);
                 addToWalletButton.setOnClickListener(v -> {
-                    // Handle wallet link action
-                    // You can implement wallet integration here
+                    Log.i("ChatAdapter", "Wallet link  raw: " + message.getWalletLink());
+                    String url = message.getWalletLink();
+                    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                        url = "https://" + url; // ensure correct scheme
+                    }
+
+                    Log.i("ChatAdapter", "Wallet link : " + url);
+
+                    Intent walletIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                    walletIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); // safer context flag
+
+                    if (walletIntent.resolveActivity(itemView.getContext().getPackageManager()) != null) {
+                        itemView.getContext().startActivity(walletIntent);
+                    } else {
+                        Toast.makeText(itemView.getContext(), "No app found to open link", Toast.LENGTH_SHORT).show();
+                    }
                 });
             } else {
-                addToWalletButton.setVisibility(View.GONE);
+                addToWalletButton.setVisibility(View.INVISIBLE);
             }
 
             // Configure message bubble appearance based on sender
