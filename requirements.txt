@@ -9,3 +9,5 @@ python-multipart
 google-auth
 google-api-python-client
 firebase-admin
+matplotlib
+google-cloud-storage

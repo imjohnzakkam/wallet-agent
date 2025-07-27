@@ -116,10 +116,10 @@ class FirebaseClient():
         
         query = receipts_ref
         
-        # if start_timestamp:
+        # if start_timestamp:   
         #     if isinstance(start_timestamp, str):
         #         start_timestamp = datetime.fromisoformat(start_timestamp.replace('Z', '+00:00'))
-        #     query = query.where(TIMESTAMP, '>=', start_timestamp)
+        #     query = query.where(TIMESTAMP, '>=', start_timestamp) 
             
         # if end_timestamp:
         #     if isinstance(end_timestamp, str):

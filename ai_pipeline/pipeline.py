@@ -18,6 +18,9 @@ from vertexai.generative_models import (
     Tool,
 )
 from pathlib import Path
+import matplotlib.pyplot as plt
+from collections import Counter
+from google.cloud import storage
 
 from backend.firestudio.firebase import FirebaseClient
 from ai_pipeline import analysis_tools
@@ -384,14 +387,89 @@ class ReceiptAnalysisPipeline:
         self.db = db_client
         logger.info("ReceiptAnalysisPipeline initialized successfully")
         
-    def generate_periodic_insights(self, user_id: str) -> List[WalletPass]:
-        """Generate periodic insights and alerts"""
+    def generate_periodic_insights(self, user_id: str) -> List[dict[str,Any]]:
+        """
+        Generate periodic insights by analyzing monthly spending, creating a histogram,
+        and identifying top spending categories.
+        """
         logger.info(f"Generating insights for user {user_id}")
         
-        # This is a mock implementation. A real implementation would fetch and analyze data.
+        # 1. Fetch current month's receipts
+        now = datetime.now()
+        start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        receipt_docs = self.db.get_receipts_by_timerange(user_id, start_of_month, now)
+        receipts = [Receipt.from_dict(doc) for doc in receipt_docs]
+        
+        if not receipts:
+            return [WalletPass(pass_type=PassType.ANALYTICS, title="Monthly Summary", subtitle="No receipts found for this month.", details={})]
+
+        # 2. Aggregate spending by category
+        spending_by_category = Counter()
+        for receipt in receipts:
+            spending_by_category[receipt.category.value] += receipt.amount
+            
+        # 3. Get top 3 spending categories
+        top_3_categories = spending_by_category.most_common(3)
+        
+        # 4. Generate histogram plot
+        plt.style.use('dark_background')
+        fig, ax = plt.subplots(figsize=(12, 7), facecolor='#1E1E1E')
+        
+        categories = list(spending_by_category.keys())
+        amounts = list(spending_by_category.values())
+        
+        bars = ax.bar(categories, amounts, color='#4CAF50')
+        
+        ax.set_title(f'Monthly Spending for {now.strftime("%B %Y")}', fontsize=20, color='white')
+        ax.set_ylabel('Amount (INR)', fontsize=14, color='white')
+        ax.set_xlabel('Category', fontsize=14, color='white')
+        ax.tick_params(axis='x', colors='white', rotation=45)
+        ax.tick_params(axis='y', colors='white')
+        ax.grid(axis='y', linestyle='--', alpha=0.6)
+        
+        for bar in bars:
+            height = bar.get_height()
+            ax.annotate(f'{height:.2f}',
+                        xy=(bar.get_x() + bar.get_width() / 2, height),
+                        xytext=(0, 3),
+                        textcoords="offset points",
+                        ha='center', va='bottom', fontsize=10, color='white')
+
+        plot_filename = f"/tmp/insights_{user_id}_{now.strftime('%Y%m')}.png"
+        plt.savefig(plot_filename, facecolor=fig.get_facecolor(), edgecolor='none')
+        plt.close()
+        
+        # 5. Upload plot to GCS
+        gcs_bucket_name = os.getenv("GCS_BUCKET_NAME", "wallet-agent")
+        plot_url = ""
+        if gcs_bucket_name:
+            blob_name = f"insights/{user_id}/spending_{now.strftime('%Y%m')}.png"
+            try:
+                bucket = self.storage_client.bucket(gcs_bucket_name)
+                blob = bucket.blob(blob_name)
+                blob.upload_from_filename(plot_filename)
+
+                # Generate a signed URL for the blob, valid for 15 minutes
+                plot_url = blob.generate_signed_url(
+                    version="v4",
+                    expiration=timedelta(minutes=15),
+                    method="GET",
+                )
+                # logger.info(f"Generated signed URL for plot: {plot_url}")
+            except Exception as e:
+                logger.error(f"Failed to upload plot or generate signed URL: {e}", exc_info=True)
+        else:
+            logger.error("GCS_BUCKET_NAME environment variable not set. Skipping plot upload.")
+
+        # 6. Create WalletPass with insights
         return [
-            WalletPass(pass_type=PassType.ANALYTICS, title=f"Monthly Summary", subtitle="Sample insight"),
-            WalletPass(pass_type=PassType.ALERT, title="Spending Alert", subtitle="Sample alert"),
+            {
+            "top_categories": [{"category": cat, "amount": f"{amt:.2f}"} for cat, amt in top_3_categories],
+            "spending_chart_url": plot_url,
+            "total_spending": sum(amounts),
+            "month": now.strftime("%B %Y")
+            }
         ]
 
 # Main Integration Class
@@ -455,20 +533,8 @@ class AIPipeline:
             'wallet_pass': pass_dict
         }
     
-    def generate_insights(self, user_id: str) -> List[Dict[str, Any]]:
-        """Generate analytical insights for user"""
+    def generate_insights(self, user_id: str) -> Dict[str, Any]:
+        """Generate analytical insights and return the details."""
         logger.info(f"Generating insights for user {user_id}")
         
-        passes = self.analytics.generate_periodic_insights(user_id)
-        
-        results = []
-        for pass_data in passes:
-            pass_dict = asdict(pass_data)
-            pass_dict['user_id'] = user_id
-            pass_dict['pass_type'] = pass_data.pass_type.value
-            
-            pass_id = self.db.add_update_pass_details(user_id, pass_doc=pass_dict)
-            results.append({'pass_id': pass_id, 'wallet_pass': pass_dict})
-        
-        logger.info(f"Insights generation completed - {len(results)} insights generated")
-        return results
+        return self.analytics.generate_periodic_insights(user_id)

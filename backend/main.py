@@ -6,10 +6,12 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 import os
 from dotenv import load_dotenv
+from google.cloud import storage
 
 from ai_pipeline.pipeline import AIPipeline, Receipt, ReceiptCategory
 from backend.api.receipts import create_wallet_receipt
 from backend.firestudio.firebase import FirebaseClient
+from backend.api.insights import create_insights_pass
 
 # Load environment variables
 load_dotenv()
@@ -17,6 +19,7 @@ load_dotenv()
 # Get project configuration
 PROJECT_ID = os.getenv("PROJECT_ID", "steady-anagram-466916-t6")
 LOCATION = os.getenv("LOCATION", "us-central1")
+GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "wallet-agent")
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -34,7 +37,7 @@ class QueryRequest(BaseModel):
     user_id: str = '123'
 
 class InsightsRequest(BaseModel):
-    user_id: str
+    user_id: str = '123'
 
 class AddToWalletRequest(BaseModel):
     user_id: str = '123'
@@ -68,10 +71,18 @@ async def query_endpoint(request: QueryRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/insights")
-async def insights_endpoint(request: InsightsRequest):
+async def insights_endpoint(user_id='123'):
     try:
-        result = pipeline.generate_insights(user_id=request.user_id)
-        return result
+        insights_data = pipeline.generate_insights(user_id=user_id)
+        
+        # Ensure insights_data is a dictionary
+        if isinstance(insights_data, list) and insights_data:
+            insights_data = insights_data[0]
+        elif not isinstance(insights_data, dict):
+            raise HTTPException(status_code=404, detail="Could not generate insights.")
+
+        wallet_link = create_insights_pass(insights_data)
+        return {"wallet_link": wallet_link}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
