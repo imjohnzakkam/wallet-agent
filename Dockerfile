@@ -4,17 +4,22 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies including curl for health check
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies with increased timeout and retries
+RUN pip install --no-cache-dir \
+    --timeout 1000 \
+    --retries 5 \
+    --default-timeout=1000 \
+    -r requirements.txt
 
 # Copy the entire project (including ai_pipeline)
 COPY backend/  ./backend
@@ -30,9 +35,9 @@ ENV PYTHONUNBUFFERED=1
 # Expose port
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=300s --timeout=300s --start-period=50s --retries=3 \
-    CMD curl -f http://localhost:8000/ || exit 1
+# Health check with shorter intervals and timeout
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
 
 # Run the application
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"] 
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
