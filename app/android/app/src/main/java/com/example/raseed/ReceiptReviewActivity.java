@@ -83,7 +83,7 @@ public class ReceiptReviewActivity extends AppCompatActivity {
         new TimePickerDialog(
                 this,
                 (view, hourOfDay, minute) ->
-                        receiptTime.setText(String.format(Locale.getDefault(), "%02d:%02d", hourOfDay, minute)),
+                        receiptTime.setText(String.format(Locale.getDefault(), "%02d:%02d:00", hourOfDay, minute)),
                 calendar.get(Calendar.HOUR_OF_DAY),
                 calendar.get(Calendar.MINUTE),
                 true

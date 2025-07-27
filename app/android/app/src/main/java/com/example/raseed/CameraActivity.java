@@ -258,6 +258,8 @@ public class CameraActivity extends AppCompatActivity {
                             reviewIntent.putExtra("amount", String.valueOf(ocrResponse.ocrResult.amount));
                             reviewIntent.putExtra("receipt_id", ocrResponse.receiptId);
                             reviewIntent.putExtra("user_id", "123");
+                            Uri imageUri = Uri.fromFile(imageFile);
+                            reviewIntent.putExtra("imagePath", imageUri.toString());
 
                             startActivity(reviewIntent);
                             finish();
@@ -278,9 +280,9 @@ public class CameraActivity extends AppCompatActivity {
                 }
 
                 // Cleanup temp image file
-                if (imageFile.exists()) {
-                    imageFile.delete();
-                }
+//                if (imageFile.exists()) {
+//                    imageFile.delete();
+//                }
             }
         });
     }

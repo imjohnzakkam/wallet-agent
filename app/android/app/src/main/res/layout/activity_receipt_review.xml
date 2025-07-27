@@ -3,70 +3,131 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true"
-    android:padding="24dp">
+    android:padding="16dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:gravity="center_horizontal"
-        android:spacing="16dp">
+        android:gravity="center_horizontal">
 
+        <!-- Receipt Image with proper sizing -->
         <ImageView
             android:id="@+id/receiptImage"
             android:layout_width="match_parent"
-            android:layout_height="200dp"
-            android:scaleType="centerCrop"
-            android:layout_marginBottom="24dp" />
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="20dp"
+            android:scaleType="fitCenter"
+            android:adjustViewBounds="true"
+            android:maxHeight="300dp"
+            android:background="@android:color/darker_gray" />
 
-        <EditText
-            android:id="@+id/vendorName"
+        <!-- Form Fields Container -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Vendor Name"
-            android:inputType="textPersonName"
-            android:textSize="16sp" />
+            android:orientation="vertical">
 
-        <EditText
-            android:id="@+id/billCategory"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Bill Category"
-            android:inputType="text"
-            android:textSize="16sp" />
+            <!-- Vendor Name -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:hint="Vendor Name">
 
-        <EditText
-            android:id="@+id/receiptDate"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Date (YYYY-MM-DD)"
-            android:inputType="date"
-            android:textSize="16sp" />
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/vendorName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:selectAllOnFocus="true"
+                    android:maxLines="1" />
 
-        <EditText
-            android:id="@+id/receiptTime"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Time (HH:MM)"
-            android:inputType="time"
-            android:textSize="16sp" />
+            </com.google.android.material.textfield.TextInputLayout>
 
-        <EditText
-            android:id="@+id/totalAmount"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Amount"
-            android:inputType="numberDecimal"
-            android:textSize="16sp" />
+            <!-- Bill Category -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:hint="Bill Category">
 
-        <Button
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/billCategory"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:maxLines="1" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Receipt Date -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:hint="Date (YYYY-MM-DD)">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/receiptDate"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="date"
+                    android:focusable="false"
+                    android:clickable="true"
+                    android:maxLines="1" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Receipt Time -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:hint="Time (HH:MM)">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/receiptTime"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="time"
+                    android:focusable="false"
+                    android:clickable="true"
+                    android:maxLines="1" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Total Amount -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:hint="Amount">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/totalAmount"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="numberDecimal"
+                    android:maxLines="1" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+        </LinearLayout>
+
+        <!-- Add to Wallet Button -->
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/addToWalletBtn"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="16dp"
             android:text="Add to Wallet"
-            android:layout_marginTop="24dp"
+            android:textColor="@android:color/white"
             android:backgroundTint="@android:color/holo_blue_dark"
-            android:textColor="@android:color/white" />
+            android:minHeight="48dp"
+            android:textAllCaps="false"
+            android:textSize="16sp" />
 
     </LinearLayout>
 </ScrollView>

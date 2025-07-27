@@ -70,6 +70,6 @@ dependencies {
     implementation("commons-io:commons-io:2.11.0") // Or the latest version
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4")
 
-    // REMOVED: com.google.protobuf:protobuf-java:3.25.3 - Not needed for Android
-    // REMOVED: com.google.cloud:google-cloud-speech:4.21.1 - Server-side library, doesn't work on Android
+    implementation("com.google.android.material:material:1.9.0")
+    implementation("androidx.cardview:cardview:1.0.0")
 }
