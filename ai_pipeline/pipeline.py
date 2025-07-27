@@ -278,6 +278,7 @@ class ReceiptChatAssistant:
             "find_purchases": analysis_tools.find_purchases,
             "get_largest_purchase": analysis_tools.get_largest_purchase,
             "get_spending_for_category": analysis_tools.get_spending_for_category,
+            "search": self.web_search_tool.search,
         }
 
     def process_query(self, query: str, user_id: str) -> WalletPass:
@@ -292,6 +293,7 @@ class ReceiptChatAssistant:
             Content(role="user", parts=[Part.from_text(
                 f"You are a helpful financial assistant for the Wallet Agent app. "
                 f"Analyze the user's query and use the available tools to answer it. "
+                f"You have access to 2 types of tools: 1. Tools that analyse data available in the database (analytics tools), 2. Tools that fetch data available on the web. (search tool) "
                 f"All currencies are in INR. "
                 f"Today's date is {datetime.now().strftime('%Y-%m-%d')}."
             )]),
@@ -478,7 +480,8 @@ class AIPipeline:
         logger.info("Initializing AIPipeline")
         
         # Centralized Vertex AI initialization with the correct credentials
-        vertexai.init(project=project_id, location=location, credentials=firebase_client.google_cloud_creds)
+        credentials = firebase_client.google_cloud_creds
+        vertexai.init(project=project_id, location=location, credentials=credentials)
         scoped_credentials = firebase_client.google_cloud_creds
         if credentials:
             # Re-scope credentials to ensure they have cloud-platform access.
