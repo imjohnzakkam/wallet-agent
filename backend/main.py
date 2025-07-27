@@ -72,8 +72,11 @@ async def query_endpoint(request: QueryRequest):
             llm_response= response  # Assuming result is the string response
         )
         
+        wallet_link = result['wallet_pass']['details'].get('wallet_link', None)
+        
         return {
-            "llm_response" : response
+            "llm_response" : response,
+            "wallet_link": wallet_link
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
