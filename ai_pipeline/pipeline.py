@@ -434,8 +434,11 @@ Remember: You have access to the user's complete receipt history and various ana
         
         shopping_list_prompt = f"""
         Based on the following user request and assistant response, determine if a shopping list should be created.
+                
         If so, call the `create_shopping_list_pass` function with the extracted items.
         If a shopping list is not explicitly requested or implied, do not call any function.
+
+        IMPORTANT: DO NOT CREATE A SHOPPING LIST UNLESS IT IS SPECIFICALLY MENTIONED BY THE USER TO CREATE ONE.
 
         User Request: "{query}"
         Assistant Response: "{final_response_text}"

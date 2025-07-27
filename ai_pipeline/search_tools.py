@@ -72,6 +72,8 @@ class WebSearchTool:
     def search(self, query:str = "", user_id:str = "") -> str:
         """Performs a web search for the given query using Gemini with Google Search tool.
         Always use this tool to search the web, or to get latest news/information, which is not available in the database.
+        Always use this tool to confirm information, which you can't fetch through user data and your knowledge.
+        You can use this tool to confirm news about well-known facts which are out of your knowledge
         args:
             query: str
         returns:
