@@ -149,8 +149,21 @@ public class MainActivity extends AppCompatActivity implements ChatAdapter.OnMes
             return false;
         });
 
+        startWalletCronService();
+
         // Check for audio recording permission
         checkAudioPermission();
+    }
+
+    private void startWalletCronService() {
+        Intent serviceIntent = new Intent(this, WalletCronService.class);
+        startForegroundService(serviceIntent);
+    }
+
+    // Optional: Method to stop the service if needed
+    private void stopWalletCronService() {
+        Intent serviceIntent = new Intent(this, WalletCronService.class);
+        stopService(serviceIntent);
     }
 
     // Interface implementation for long click listener
