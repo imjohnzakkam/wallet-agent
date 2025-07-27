@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "373785709671",
+    "project_id": "wallet-agent-notifs",
+    "storage_bucket": "wallet-agent-notifs.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:373785709671:android:d2a0c2bf70fc3ef55598c2",
+        "android_client_info": {
+          "package_name": "com.example.raseed"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCTJVl6QsXriBUCFqhEFYQ5dcsj96YQetA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
