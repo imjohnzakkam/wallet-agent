@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "wallet-agent-notifs",
+  "private_key_id": "c42e083649dd63071e1d265c890214db3e6d5ee4",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCkg5a2rSoOsVXP\nBkQkYEVCFBZvKkjwLddGywiZU0B/NLlVlwiWk2wuf2xE7wlFhafFGW47E38oezV1\ncAcsiJgqad3T21Og8oOfa/ZwgI8Gl3HdVS71tD4VIqpsFsVebtjAIViZBswngOyy\nFSOip+KT2SR9ReIe2y/6e+KHI8NvGfbKTMYt7+JeSyMAogYi66kqKN5TbgOZh5+E\nZZJpQohac+aPqBxReYY2fL+Tqd59UEOFOW1tuu6bF8m3WFoAGG2asxyD05SbrxvP\nWLeD15KQGajaNdS/QfsUeVaqk7dQbIrmPmaEmOvEI7Xg+mrh8azmqiSXCQKmKCQo\n5N1TbqZRAgMBAAECggEAAdBIIynzaaOC4CLIEbyB355XXTjn97sHTsArygjBkF7E\nnTI/xwJXlhIOP7ALf/mu9DCmpGt039g5tOpz+iBkc4wUr5pxJdgt6JNyTVJofpH2\nYGe+j4OR5I4hVx/U47iuJmeTtEZU418D1PvVTMyD9khATgp9FA+g5raICbWkk1hk\nkmDvGrcsaf2fH0ipcew7R4Ykid2DvWqZiaqD04F+DeWoHcmDDVKvUPuZPjSGjJMW\nslLnzngW+lAihAKBoeFfek+R7Y/d9czd1bpw+n8OqwleE0BY1snG5Ia4qCdZAcdS\nwXVLiB0/+ASM5uuW6Eqs1EEznr/WvokIfjgzHEaJYQKBgQDh7AFoAJkqt2IZCYZ7\naO0iFzY/VsoXZujVIO9DhyX+tpABmcyxBgKY6b6tCFodsmK5s6gliCFm5ZEosv5i\nCA2p6or+VvwGDPcgt7oGiIvFJYXzZqNi1eB0ZIs2OMnkd1BLJbqObVUHco9s1WKW\nmP2+3CJcpZXEKShnJX6jKDUgoQKBgQC6aqVnlnw9Cbwyl6OVrlHfWm7YW1rESwIU\nboBufE3m4IC2bAyJa40kRAZjOZvFc7/bxmJwsoBedMDaNKijybX3Ua4J24GOZRYr\n4hV0DPaZrBY/ysfpBDPzutofg6xfIownvBFeKGUeSH4Z8Z5uRWUgcrV5wXeOs4cC\nuG7yUGC3sQKBgFaNqGxD7mpjH34gHBmjtVXeNrZFdd9JWeJtX70rRe8z2jAC0Fzx\nxIT46Eg6buv5r8Edh0n5wXI+eUJycOr10uZKKT4P7TYUOYmbWfWu0n2RRqRdqjLv\nZbKx4nO/hfm1jFl99t8iG/VienhjuAWiT3STucZs2dfxPL1nrACuIsyBAoGBAIR2\njYw7IZMZ3NIycHpHAURt9T/mQmwjRJoSH07jI1QAiVWXF516gDOZ5tQRNoArDNT1\ndjPQk2kLG5KyQncIOTZBoyK8CKaPbB7Iqyfooj52SuUPidgpNWVmi+JC5XRAj0kY\n2VqH57qKFpkG2OZQh1h0SkH3WKZdKX2kYqnqtZ8xAoGASnu/bRq0+tp9loNITzaH\nXPh8J5Ce1PpJr9cXXbd8f83AayczmeWrMZlRzRpoDD78cEd2XpKYgZi4f9N66+GB\nk940bqlgIsdXeDKaERpHOemKEbq7/1nSBKz3tjnTxvrM+sfCJZICoYCMtqM5Zh09\nw/zWYi73x38ucyX0xXABOjQ=\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-fbsvc@wallet-agent-notifs.iam.gserviceaccount.com",
+  "client_id": "103902297159438747147",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40wallet-agent-notifs.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
