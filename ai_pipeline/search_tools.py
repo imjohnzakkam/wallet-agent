@@ -70,8 +70,8 @@ class WebSearchTool:
             self.use_new_sdk = False
 
     def search(self, query: str) -> str:
-        """Performs a web search for the given query using Gemini with Google Search tool."""
-        """
+        """Performs a web search for the given query using Gemini with Google Search tool.
+        Always use this tool to search the web, or to get latest news/information, which is not available in the database.
         args:
             query: str
         returns:
