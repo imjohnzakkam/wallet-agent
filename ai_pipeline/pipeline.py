@@ -26,6 +26,7 @@ from google.cloud import storage
 from backend.firestudio.firebase import FirebaseClient
 from ai_pipeline import analysis_tools
 from ai_pipeline.search_tools import WebSearchTool
+from ai_pipeline.create_shopping_wallet_tool import create_shopping_list_pass
 
 # Setup logging
 def setup_logging():
@@ -256,6 +257,7 @@ class ReceiptOCRPipeline:
 class ReceiptChatAssistant:
     def __init__(self, project_id: str, location: str, firebase_client: FirebaseClient, web_search_tool: WebSearchTool = None):
         logger.info("Initializing ReceiptChatAssistant")
+        self.shopping_list_model = GenerativeModel('gemini-2.0-flash')
         self.db_client = firebase_client
         self.generation_config = GenerationConfig(temperature=0)
 
@@ -335,11 +337,21 @@ Remember: You have access to the user's complete receipt history and various ana
         self.tool = Tool(
             function_declarations=self.function_declarations
         )
+
+        self.shopping_list_tool = Tool(
+            function_declarations=[
+                FunctionDeclaration.from_func(create_shopping_list_pass)
+            ]
+        )
         # --- End of Tool Setup ---
 
         self.toolbox = analysis_tools.all_tool_calls
         self.toolbox['search'] = self.web_search_tool.search
         logger.info("ReceiptChatAssistant initialized with system prompt")
+
+        self.shopping_list_toolbox = {
+            "create_shopping_list_pass": create_shopping_list_pass
+        }
 
     def process_query(self, query: str, user_id: str) -> WalletPass:
         """
@@ -419,16 +431,52 @@ Remember: You have access to the user's complete receipt history and various ana
 
         final_response_text = response.text if response.candidates else "No response from model."
         logger.info(f"Final synthesized response: {final_response_text}")
-
-        # Determine appropriate pass type based on query and execution
-        pass_type = self._determine_pass_type(query, execution_results)
         
-        # Generate appropriate title based on pass type
-        title = self._generate_title(pass_type, query, execution_results)
+        shopping_list_prompt = f"""
+        Based on the following user request and assistant response, determine if a shopping list should be created.
+        If so, call the `create_shopping_list_pass` function with the extracted items.
+        If a shopping list is not explicitly requested or implied, do not call any function.
+
+        User Request: "{query}"
+        Assistant Response: "{final_response_text}"
+        """
+        # print(query)
+        shopping_list_response = self.shopping_list_model.generate_content(
+            [shopping_list_prompt],
+            tools=[self.shopping_list_tool]
+        )
+        # print(shopping_list_response)
+        # print(final_response_text)
+        # print(shopping_list_response.text)
+        if shopping_list_response.candidates and shopping_list_response.candidates[0].content.parts and shopping_list_response.candidates[0].content.parts[0].function_call:
+            function_call = shopping_list_response.candidates[0].content.parts[0].function_call
+            tool_name = function_call.name
+            
+            if tool_name == "create_shopping_list_pass":
+                logger.info(f"Shopping list tool called: {tool_name}")
+                tool_func = self.shopping_list_toolbox.get(tool_name)
+                if tool_func:
+                    try:
+                        args = dict(function_call.args)
+                        shopping_list_data = tool_func(**args)
+                        
+                        # logger.info(f"Created shopping list: {shopping_list_data}")
+                        
+                        shopping_list_data['response'] = final_response_text
+                        return WalletPass(
+                            pass_type=PassType.SHOPPING_LIST,
+                            title="Your Shopping List",
+                            subtitle=f"Created from your request",
+                            details=shopping_list_data
+                        )
+                    except Exception as e:
+                        logger.error(f"Error executing shopping list tool: {e}", exc_info=True)
+        
+        logger.info("No shopping list created. Returning original response.")
 
         return WalletPass(
-            pass_type=pass_type,
-            title=title,
+            pass_type=PassType.OTHER,
+            title="Your Agent's Answer",
             subtitle=query,
             details={"response": final_response_text, "execution_results": execution_results}
         )
