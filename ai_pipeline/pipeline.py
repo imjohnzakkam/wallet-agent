@@ -257,7 +257,7 @@ class ReceiptOCRPipeline:
 class ReceiptChatAssistant:
     def __init__(self, project_id: str, location: str, firebase_client: FirebaseClient, web_search_tool: WebSearchTool = None):
         logger.info("Initializing ReceiptChatAssistant")
-        self.shopping_list_model = GenerativeModel('gemini-2.0-flash')
+        self.shopping_list_model = GenerativeModel('gemini-2.5-flash')
         self.db_client = firebase_client
         self.generation_config = GenerationConfig(temperature=0)
 
@@ -322,7 +322,7 @@ Remember: You have access to the user's complete receipt history and various ana
 
         # Initialize model with system instruction
         self.model = GenerativeModel(
-            'gemini-2.0-flash',
+            'gemini-2.5-flash',
             system_instruction=system_instruction
         )
         self.web_search_tool = web_search_tool
@@ -428,8 +428,10 @@ Remember: You have access to the user's complete receipt history and various ana
             # Add the tool execution results to the history
             history.append(Content(role="tool", parts=tool_responses))
 
-
-        final_response_text = response.text if response.candidates else "No response from model."
+        try:
+            final_response_text = response.text if response.candidates else "No response from model."
+        except: 
+            final_response_text = "Currently facing connectivity issues. Please try again later." #response.candidates.content.parts.text
         logger.info(f"Final synthesized response: {final_response_text}")
         
         shopping_list_prompt = f"""
@@ -443,14 +445,10 @@ Remember: You have access to the user's complete receipt history and various ana
         User Request: "{query}"
         Assistant Response: "{final_response_text}"
         """
-        # print(query)
         shopping_list_response = self.shopping_list_model.generate_content(
             [shopping_list_prompt],
             tools=[self.shopping_list_tool]
         )
-        # print(shopping_list_response)
-        # print(final_response_text)
-        # print(shopping_list_response.text)
         if shopping_list_response.candidates and shopping_list_response.candidates[0].content.parts and shopping_list_response.candidates[0].content.parts[0].function_call:
             function_call = shopping_list_response.candidates[0].content.parts[0].function_call
             tool_name = function_call.name

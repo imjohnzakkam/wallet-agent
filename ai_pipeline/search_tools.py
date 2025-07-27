@@ -66,7 +66,7 @@ class WebSearchTool:
             from vertexai.generative_models import GenerativeModel
             
             vertexai.init(project=project_id, location=location, credentials=credentials)
-            self.model = GenerativeModel(model_name="gemini-1.5-flash")
+            self.model = GenerativeModel(model_name="gemini-2.5-flash")
             self.use_new_sdk = False
 
     def search(self, query:str = "", user_id:str = "") -> str:
